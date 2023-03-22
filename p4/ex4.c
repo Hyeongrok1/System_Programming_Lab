@@ -33,7 +33,7 @@ int return_digit(int line) {
 int main(int argc, char **argv) {
 	
 	if (argc == 1) {
-		printf("Need more argument!");
+		printf("Needs more argument!\n");
 		exit(1);
 	}
 
@@ -69,15 +69,16 @@ int main(int argc, char **argv) {
 	write(fd_num, line_str, 1);
 	write(fd_num, format, 3);
 	while (read(fd, &c, 1) != 0) {
-		if (c == '\n') {
+		if (c == '\n' && read(fd, &c, 1) != 0) {
 			line++;
 			itoa(line_str, line);
 			digit = return_digit(line);
 
-
 			write(fd_num, "\n", 1);
 			write(fd_num, line_str, digit);
 			write(fd_num, format, 3);
+
+			lseek(fd, -1, SEEK_CUR);
 
 			continue;
 		}
