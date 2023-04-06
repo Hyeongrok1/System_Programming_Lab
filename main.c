@@ -14,6 +14,7 @@
 
 int main(void) {
 	unsigned int pid;
+	unsigned int child_pid;
 	time_t t;
 	struct tm tm;
 	int fd;
@@ -47,11 +48,10 @@ int main(void) {
 	syslog(LOG_DEBUG, "now running");
 	t = time(NULL);
 	localtime_r(&t, &tm);
+
 	buf[0] = '\0';
 	if (read(fd, buf, sizeof(buf)) != 0) {
 		int stat;
-		unsigned int child_pid;
-		
 		char *pos;
 		int i = 0;
 		str = strtok_r(buf, " ", &pos);
@@ -66,24 +66,26 @@ int main(void) {
 		if (argv[1][0] == '*') hour = -1;
 
 		syslog(LOG_DEBUG, "%d %d", minute, hour);
-		while (1)
-		{
-			if ((minute == tm.tm_min || minute == -1) && (hour == tm.tm_hour || hour == -1)) {
-				if ((child_pid = fork()) == 0) {
-					waitpid(child_pid, NULL, WNOHANG);
-				}
-				else {
-					syslog(LOG_DEBUG, "%s", argv[2]);
-					execl("/bin/sh", "/bin/sh", "-c", argv[2], (char *) NULL);
-					syslog(LOG_DEBUG, "will not show");
-				}
-			}
-			syslog(LOG_DEBUG, "waiting");
-			t = time(NULL);
-			localtime_r(&t, &tm);
-			sleep(60 - tm.tm_sec % 60);
-		}
 	}
+
+	while (1)
+	{
+		if ((minute == tm.tm_min || minute == -1) && (hour == tm.tm_hour || hour == -1)) {
+			if ((child_pid = fork()) == 0) {
+				waitpid(child_pid, NULL, WNOHANG);
+			}
+			else {
+				syslog(LOG_DEBUG, "%s", argv[2]);
+				execl("/bin/sh", "/bin/sh", "-c", argv[2], (char *) NULL);
+				syslog(LOG_DEBUG, "will not show");
+			}
+		}
+		syslog(LOG_DEBUG, "waiting");
+		t = time(NULL);
+		localtime_r(&t, &tm);
+		sleep(60 - tm.tm_sec % 60);
+	}
+
 	syslog(LOG_DEBUG, "END");
 	return 0;
 }
