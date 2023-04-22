@@ -23,4 +23,3 @@ int length(const char* str)
     for (cnt = 0; str[cnt] != '\0'; cnt++);
     return cnt;
 }
-
