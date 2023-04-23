@@ -75,7 +75,7 @@ int BoyerMooreSearch(int offset, int *lines, char *text, char *pattern)
         }
                                     
 
-        if(j < 0 && (text[s+pattern_length] == ' ' || text[s+pattern_length] == '\n' || text[s+pattern_length] == ')') && (text[s-1] == ' ' || text[s-1] == '\n' || text[s-1] == '('))                   
+        if(j < 0 && (text[s+pattern_length] == ' ' || text[s+pattern_length] == '\n') && (text[s-1] == ' ' || text[s-1] == '\n'))                   
         {               // If all characters are same and it is a word, print the location using write syscall
             char tmp[10];
             char tmp2[20];
@@ -120,7 +120,7 @@ int BoyerMooreSearch2(int offset, int *lines, char *text, char *pattern, int *ob
             else break;
         }
  
-        if(j < 0 && (text[s+pattern_length] == ' ' || text[s+pattern_length] == '\n' || text[s+pattern_length] == ')') && (text[s-1] == ' ' || text[s-1] == '\n' || text[s-1] == '('))           
+        if(j < 0 && (text[s+pattern_length] == ' ' || text[s+pattern_length] == '\n') && (text[s-1] == ' ' || text[s-1] == '\n'))           
         {
             object_list[idx++] = lines[s] + 1;  // If we found the pattern, we should remember the line
             s += (s < text_length-pattern_length) ? pattern_length-characters[(int) text[s+pattern_length]] : 1;
@@ -154,7 +154,7 @@ int BoyerMooreSearch4(int offset, int *lines, char *text, char *pattern, int *li
             else break;
         }
  
-        if(j < 0 && (text[s+pattern_length] == ' ' || text[s+pattern_length] == '\n' || text[s+pattern_length] == ')') && (text[s-1] == ' ' || text[s-1] == '\n' || text[s-1] == '('))                 
+        if(j < 0 && (text[s+pattern_length] == ' ' || text[s+pattern_length] == '\n') && (text[s-1] == ' ' || text[s-1] == '\n'))                 
         {
             line_list[idx] = lines[s] + 1;
             offset_list[idx++] = offset + s - start_idx[lines[s]];  // We should remember the line and the offset at the same time
