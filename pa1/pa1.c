@@ -70,7 +70,7 @@ int BoyerMooreSearch(int offset, int *lines, char *text, char *pattern)
                                     // pattern의 문자와 text가 매칭하면 j를 줄여
                                     // 나쁜 문자를 찾는다
  
-        if(j < 0 && (text[s+pattern_length] == ' ' || text[s+pattern_length] == '\n') && (text[s-1] == ' ' || text[s-1] == '\n' || s-1 < 0))                   // 문자열이 일치하였을 때
+        if(j < 0 && (text[s+pattern_length] == ' ' || text[s+pattern_length] == '\n' || text[s+pattern_length] == ')') && (text[s-1] == ' ' || text[s-1] == '\n' || text[s-1] == '('))                   // 문자열이 일치하였을 때
         {
             char tmp[10];
             char tmp2[20];
@@ -113,7 +113,7 @@ int BoyerMooreSearch2(int offset, int *lines, char *text, char *pattern, int *ob
             // pattern의 문자와 text가 매칭하면 j를 줄여
                                     // 나쁜 문자를 찾는다
  
-        if(j < 0 && (text[s+pattern_length] == ' ' || text[s+pattern_length] == '\n') && (text[s-1] == ' ' || text[s-1] == '\n'))                   // 문자열이 일치하였을 때
+        if(j < 0 && (text[s+pattern_length] == ' ' || text[s+pattern_length] == '\n' || text[s+pattern_length] == ')') && (text[s-1] == ' ' || text[s-1] == '\n' || text[s-1] == '('))                   // 문자열이 일치하였을 때
         {
             object_list[idx++] = lines[s] + 1;
             s += (s < text_length-pattern_length) ? pattern_length-badchar[(int) text[s+pattern_length]] : 1;
@@ -149,7 +149,7 @@ int BoyerMooreSearch3(int offset, int *lines, char *text, char *pattern, int *li
                                     // pattern의 문자와 text가 매칭하면 j를 줄여
                                     // 나쁜 문자를 찾는다
  
-        if(j < 0 && (text[s+pattern_length] == ' ' || text[s+pattern_length] == '\n') && (text[s-1] == ' ' || text[s-1] == '\n'))                   // 문자열이 일치하였을 때
+        if(j < 0 && (text[s+pattern_length] == ' ' || text[s+pattern_length] == '\n' || text[s+pattern_length] == ')') && (text[s-1] == ' ' || text[s-1] == '\n' || text[s-1] == '('))                   // 문자열이 일치하였을 때
         {
             line_list[idx] = lines[s] + 1;
             offset_list[idx++] = offset + s - start_idx[lines[s]];

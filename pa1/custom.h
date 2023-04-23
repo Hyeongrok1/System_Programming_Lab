@@ -5,7 +5,7 @@
 #include <stdlib.h>
 
 //매크로 선언
-#define MAX_INPUT 4096
+#define MAX_INPUT 8192
 #define MAX_HEAP 500000
 //구조체, type 선언
 
