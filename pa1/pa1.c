@@ -12,7 +12,7 @@ int idx = 0;
 int base_len = 0;
 int first_len = 0;
 int second_len = 0;
-bool first_write = 1;
+int first_write = 1;
 
 // Identify the case (1, 2, 3, 4)
 int case_id(int *ptr_cnt, char *tmp_ptr[], char *word, int cnt) {
@@ -82,8 +82,8 @@ int BoyerMooreSearch(int offset, int *lines, char *text, char *pattern)
             itoa(lines[s] + 1, tmp);                        // Using itoa, convert integer to string
             itoa(offset + s - start_idx[lines[s]], tmp2);
 
-            if (first_write == false) write(STDOUT_FILENO, " ", 1); // This is for formatting. If the program writes more than one location, there should be space.
-            else first_write = false;
+            if (first_write == 0) write(STDOUT_FILENO, " ", 1); // This is for formatting. If the program writes more than one location, there should be space.
+            else first_write = 0;
 
             write(STDOUT_FILENO, tmp, length(tmp));
             write(STDOUT_FILENO, ":", 1);
@@ -198,14 +198,14 @@ int *intersection(int *base_list, int *object_list) {
 
 // This is for case 4
 // We should check if there is more than one word between two words.
-void *intersection4(int *first_list, int *first_offset_list, int *second_list, int *second_offset_list, int *base_list) {
+void *intersection4(int *first_list, int *first_offset_list, int *second_list, int *second_offset_list, int *base_list, int word_len) {
     int k = 0;
     
     for (int i = 0; i < first_len; i++) 
     {
         for (int j = 0; j < second_len; j++) 
         {
-            if (first_list[i] == second_list[j] && second_offset_list[j] - first_offset_list[i] >= 3) {
+            if (first_list[i] == second_list[j] && second_offset_list[j] - first_offset_list[i] - word_len >= 3) {
                 base_list[k++] = first_list[i];
             }
         }
@@ -357,7 +357,7 @@ int main(int argc, char *argv[])
                 free(base_list);
                 bufclean(buf);
             }
-            first_write = true;
+            first_write = 1;
             write(STDOUT_FILENO, "\n", 1);
         }
         else if (id == 3) {
@@ -387,6 +387,7 @@ int main(int argc, char *argv[])
                 offset += MAX_INPUT;
                 bufclean(buf);
             }
+            first_write = 1;
             write(STDOUT_FILENO, "\n", 1);
         }
         else if (id == 4) {
@@ -415,17 +416,20 @@ int main(int argc, char *argv[])
                 first_len = idx;
                 BoyerMooreSearch4(offset, lines, buf, second, second_list, second_offset_list);
                 second_len = idx;
-                intersection4(first_list, first_offset_list, second_list, second_offset_list, base_list); 
+                intersection4(first_list, first_offset_list, second_list, second_offset_list, base_list, length(first)); 
                 offset += MAX_INPUT;
 
+                int tmp_line = -1;
                 for (int i = 0; i < base_len; i++) {
-                    char itoa_str[10];
-                    itoa(base_list[i], itoa_str);
+                    if (base_list[i] > tmp_line) {
+                        char itoa_str[10];
+                        itoa(base_list[i], itoa_str);
 
-                    if (first_write == 0) write(STDOUT_FILENO, " ", 1);
-                    else first_write = 0;
-                    write(STDOUT_FILENO, itoa_str, length(itoa_str));
-                    // printf("%d ", base_list[i]);
+                        if (first_write == 0) write(STDOUT_FILENO, " ", 1);
+                        else first_write = 0;
+                        write(STDOUT_FILENO, itoa_str, length(itoa_str));
+                    }
+                    tmp_line = base_list[i];
                 }
                 bufclean(buf);
             }
@@ -434,7 +438,7 @@ int main(int argc, char *argv[])
             free(second_list);
             free(first_offset_list);
             free(second_offset_list);
-            first_write = true;
+            first_write = 1;
             write(STDOUT_FILENO, "\n", 1);
         }
 

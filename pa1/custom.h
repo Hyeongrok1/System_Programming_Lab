@@ -3,9 +3,6 @@
 
 // Macro
 #define MAX_INPUT 1048576
-// Type
-
-typedef enum { false, true } bool;
 
 // Functions
 int max(int a, int b)
