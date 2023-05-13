@@ -8,6 +8,7 @@
 #include <stdbool.h>
 #include <signal.h>
 #include <sys/stat.h>
+#include <errno.h>
 
 // INPUT OF USER
 #define MAX_INPUT 200
@@ -23,31 +24,42 @@ bool command_head(int argc, char *argv[]) {
     int fd;
     int line = 0; 
     int nbytes = 0;
+    char *err_msg = NULL;
     char c;
     if (argc == 2) {
         if ((fd = open(argv[1], O_RDONLY)) < 0) {
-            printf("mini: No such file or directory\n");
+            err_msg = "head: No such file or directory\n";
+            write(STDERR_FILENO, err_msg, strlen(err_msg));
             return false;
         }
     }
     else if (argc == 4) {
         if ((fd = open(argv[3], O_RDONLY)) < 0) {
-            printf("mini: No such file or directory\n");
+            err_msg = "head: No such file or directory\n";
+            write(STDERR_FILENO, err_msg, strlen(err_msg));
             return false;
         }
     }
 
-    if (argc == 1) printf("Usage: head [OPTION] [file]\n");
+    if (argc == 1) {
+        err_msg = "head: No such file or directory\n";
+        write(STDERR_FILENO, err_msg, strlen(err_msg));
+        return false;
+    }
     else if (argc == 2) line = 10;
     else if (argc == 4) {
         if (strcmp(argv[1], "-n") != 0) {
-            printf("Usage: %s option is invalid", argv[1]);
+            err_msg = "head: Invalid option\n";
+            write(STDERR_FILENO, err_msg, strlen(err_msg));
             return false;
         }
         line = atoi(argv[2]);
     }
     else {
-        if (close(fd) < 0) printf("mini: File close error\n");
+        if (close(fd) < 0) {
+            sprintf(err_msg, "head: Error occurred: %d\n", errno);
+            write(STDERR_FILENO, err_msg, strlen(err_msg));
+        }
         return false;
     }
 
@@ -58,7 +70,11 @@ bool command_head(int argc, char *argv[]) {
         if (i == line) break;
     }
 
-    if (close(fd) < 0) printf("mini: File close error\n");
+    if (close(fd) < 0) {
+        sprintf(err_msg, "head: Error occurred: %d\n", errno);
+        write(STDERR_FILENO, err_msg, strlen(err_msg));
+    }
+    return true;
 }
 
 // tail
@@ -66,17 +82,20 @@ bool command_tail(int argc, char *argv[]) {
     int fd;
     int line = 0; 
     int nbytes = 0;
+    char *err_msg = NULL;
     char buf[512];
     char c;
     if (argc == 2) {
         if ((fd = open(argv[1], O_RDONLY)) < 0) {
-            printf("mini: No such file or directory\n");
+            err_msg = "tail: No such file or directory\n";
+            write(STDERR_FILENO, err_msg, strlen(err_msg));
             return false;
         }
     }
     else if (argc == 4) {
         if ((fd = open(argv[3], O_RDONLY)) < 0) {
-            printf("mini: No such file or directory\n");
+            err_msg = "tail: No such file or directory\n";
+            write(STDERR_FILENO, err_msg, strlen(err_msg));
             return false;
         }
     }
@@ -91,7 +110,7 @@ bool command_tail(int argc, char *argv[]) {
         line = atoi(argv[2]);
     }
     else {
-        if (close(fd) < 0) printf("mini: File close error\n");
+        if (close(fd) < 0) printf("tail: File close error\n");
         return false;
     }
 
@@ -108,7 +127,7 @@ bool command_tail(int argc, char *argv[]) {
         printf("%c", c);
     }
     printf("\n");
-    if (close(fd) < 0) printf("mini: File close error\n");
+    if (close(fd) < 0) printf("tail: File close error\n");
 }
 
 // cat
@@ -156,7 +175,6 @@ bool command_cp(int argc, char *argv[]) {
         return false;        
     }
     if ((fd2 = open(argv[2], O_RDWR|O_CREAT, 0755)) < 0) {
-        printf("mini: No such file or directory\n");
         return false;
     }
 
@@ -191,7 +209,7 @@ void command_mv(int argc, char *argv[]) {
     }
 
     struct stat buf;
-    char path[MAX_PATH_LEN];
+    char path[MAX_PATH_LEN] = {'\0',};
     char *cp_argv[3];
     char *rm_argv[2];
     mode_t types[2];
@@ -208,6 +226,10 @@ void command_mv(int argc, char *argv[]) {
         cp_argv[0] = "cp";
         cp_argv[1] = argv[1];
         cp_argv[2] = argv[2];
+        if (strchr(cp_argv[2], '/') == NULL) {
+            sprintf(path, "./%s/%s", argv[2], argv[1]);
+            cp_argv[2] = path;
+        }
         rm_argv[0] = "rm";
         rm_argv[1] = argv[1];
         command_cp(3, cp_argv);
@@ -248,11 +270,12 @@ bool command_exit(int argc, char *argv[]) {
 }
 
 void sig_int_handler() {
-    // write code
 }
 
 void sig_tstp_handler() {
-    // write code
+    int status;
+    waitpid(-1, &status, WNOHANG | WUNTRACED);
+    if (WIFSTOPPED(status)) kill(0, SIGKILL);
 }
 
 int main(void) {
@@ -280,16 +303,29 @@ int main(void) {
             }
             argv[argc] = NULL;
 
-            if (strcmp(argv[0], "head") == 0) command_head(argc, argv);
-            else if (strcmp(argv[0], "tail") == 0) command_tail(argc, argv);
-            else if (strcmp(argv[0], "cat") == 0) command_cat(argc, argv);
-            else if (strcmp(argv[0], "cp") == 0) command_cp(argc, argv);            
-            // else if (strcmp(argv[0], "mv") == 0) command_mv(argc, argv);
-            // else if (strcmp(argv[0], "rm") == 0) command_rm(argc, argv);
+            if (strcmp(argv[0], "head") == 0 ||
+                strcmp(argv[0], "tail") == 0 ||
+                strcmp(argv[0], "cat") == 0 ||
+                strcmp(argv[0], "cp") == 0 ||
+                strcmp(argv[0], "mv") == 0 ||
+                strcmp(argv[0], "rm") == 0 ||
+                strcmp(argv[0], "pwd") == 0
+            ) {
+                if (fork() == 0) {
+                    execv(argv[0], argv);
+                    exit(0);
+                }
+                else wait(&child_status);
+            }
             else if (strcmp(argv[0], "cd") == 0) command_cd(argc, argv);
-            else if (strcmp(argv[0], "pwd") == 0) command_pwd(argc, argv);
             else if (strcmp(argv[0], "exit") == 0) command_exit(argc, argv);
-            else {
+            else if (strcmp(argv[0], "ls") == 0 ||
+                strcmp(argv[0], "man") == 0 ||
+                strcmp(argv[0], "grep") == 0 ||
+                strcmp(argv[0], "sort") == 0 ||
+                strcmp(argv[0], "awk") == 0 ||
+                strcmp(argv[0], "bc") == 0
+            ) {
                 sprintf(path, "/bin/%s", argv[0]);
 
                 if (fork() == 0) {       // Fork and execute the path
@@ -298,9 +334,21 @@ int main(void) {
                 }
                 else wait(&child_status); // Wait the child process     
             }            
-        }
+        } else {
+            ptr = strtok(command, " ");
+            while (ptr != NULL) { 
+                argv[argc++] = ptr;
+                ptr = strtok(NULL, " ");
+            }
+            argv[argc] = NULL;
 
-        
+            for (int i = 0; i < argc; i++) {
+
+
+
+                break;
+            }
+        }
     }
 
     return 0;
