@@ -11,7 +11,7 @@
 
 int main (int argc, char* argv[]) {
 	int listening_fd, connecting_fd, connecting_address_length;
-	struct hostent* host_entry;
+	//struct hostent* host_entry;
 	struct sockaddr_in socket_address, connecting_address;
 	char buffer[MAXLINE], buffer_data[MAXLINE];
 
