@@ -16,29 +16,38 @@ int main(int argc, char *argv[]) {
         if ((fd = open(argv[1], O_RDONLY)) < 0) {
             err_msg = "tail: No such file or directory\n";
             write(STDERR_FILENO, err_msg, strlen(err_msg));
-            return 0;
+            exit(1);
         }
     }
     else if (argc == 4) {
         if ((fd = open(argv[3], O_RDONLY)) < 0) {
             err_msg = "tail: No such file or directory\n";
             write(STDERR_FILENO, err_msg, strlen(err_msg));
-            return 0;
+            exit(1);
         }
     }
 
-    if (argc == 1) printf("Usage: head [OPTION] [file]\n");
+    if (argc == 1) {
+        err_msg = "tail: usage: tail [OPTION] [file]\n";
+        write(STDERR_FILENO, err_msg, strlen(err_msg));
+        exit(1);
+    }
     else if (argc == 2) line = 10;
     else if (argc == 4) {
         if (strcmp(argv[1], "-n") != 0) {
-            printf("Usage: %s option is invalid", argv[1]);
-            return 0;
+            err_msg = "tail: Invalid option\n";
+            write(STDERR_FILENO, err_msg, strlen(err_msg));
+            exit(1);
         }
         line = atoi(argv[2]);
     }
     else {
-        if (close(fd) < 0) printf("tail: File close error\n");
-        return 0;
+        if (close(fd) < 0) {
+            sprintf(err_msg, "tail: Error occurred: %d\n", errno);
+            write(STDERR_FILENO, err_msg, strlen(err_msg));
+            exit(errno);
+        }
+        exit(0);
     }
 
     int i = 0;
@@ -54,5 +63,10 @@ int main(int argc, char *argv[]) {
         printf("%c", c);
     }
     printf("\n");
-    if (close(fd) < 0) printf("tail: File close error\n");
+    if (close(fd) < 0) {
+        sprintf(err_msg, "tail: Error occurred: %d\n", errno);
+        write(STDERR_FILENO, err_msg, strlen(err_msg));
+        exit(errno);
+    }
+    exit(0);
 }

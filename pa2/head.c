@@ -15,28 +15,28 @@ int main(int argc, char *argv[]) {
         if ((fd = open(argv[1], O_RDONLY)) < 0) {
             err_msg = "head: No such file or directory\n";
             write(STDERR_FILENO, err_msg, strlen(err_msg));
-            return 0;
+            exit(1);
         }
     }
     else if (argc == 4) {
         if ((fd = open(argv[3], O_RDONLY)) < 0) {
             err_msg = "head: No such file or directory\n";
             write(STDERR_FILENO, err_msg, strlen(err_msg));
-            return 0;
+            exit(1);
         }
     }
 
     if (argc == 1) {
-        err_msg = "head: No such file or directory\n";
+        err_msg = "head: usage: head [OPTION] [file]\n";
         write(STDERR_FILENO, err_msg, strlen(err_msg));
-        return 0;
+        exit(1);
     }
     else if (argc == 2) line = 10;
     else if (argc == 4) {
         if (strcmp(argv[1], "-n") != 0) {
             err_msg = "head: Invalid option\n";
             write(STDERR_FILENO, err_msg, strlen(err_msg));
-            return 0;
+            exit(1);
         }
         line = atoi(argv[2]);
     }
@@ -44,8 +44,9 @@ int main(int argc, char *argv[]) {
         if (close(fd) < 0) {
             sprintf(err_msg, "head: Error occurred: %d\n", errno);
             write(STDERR_FILENO, err_msg, strlen(err_msg));
+            exit(errno);
         }
-        return 0;
+        exit(0);
     }
 
     int i = 0;
@@ -58,6 +59,7 @@ int main(int argc, char *argv[]) {
     if (close(fd) < 0) {
         sprintf(err_msg, "head: Error occurred: %d\n", errno);
         write(STDERR_FILENO, err_msg, strlen(err_msg));
+        exit(errno);
     }
     return 0;
 }

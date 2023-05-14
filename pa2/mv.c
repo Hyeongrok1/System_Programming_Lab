@@ -13,7 +13,7 @@ void main(int argc, char *argv[]) {
     } else if (argc == 2) {
         printf("mv: missing destination file operand after 'SOURCE'\n");
     } else if (argc != 3) {
-        printf("mv usage: mv source destination\n");
+        printf("mv: usage: mv source destination\n");
     }
 
     struct stat buf;

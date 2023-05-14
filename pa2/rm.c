@@ -1,15 +1,25 @@
 #include <stdio.h>
 #include <unistd.h>
-
+#include <errno.h>
+#include <stdlib.h>
+#include <string.h>
 // rm
 int main(int argc, char *argv[]) {
+    char *err_msg = NULL;
+
     if (argc == 1) {
-        printf("rm: missing file operand\n");
+        err_msg = "rm: missing file operand\n";
+        write(STDERR_FILENO, err_msg, sizeof(err_msg));
+        exit(1);
     } else if (argc != 2) {
-        printf("rm usage: rm file\n");
+        err_msg = "rm: usage: rm file\n";
+        write(STDERR_FILENO, err_msg, sizeof(err_msg));
+        exit(1);
     }
 
     if (unlink(argv[1]) < 0) {
-        printf("rm: unlink error\n");
+        sprintf(err_msg, "rm: Error occurred: %d\n", errno);
+        write(STDERR_FILENO, err_msg, strlen(err_msg));
+        exit(errno);
     }
 }
