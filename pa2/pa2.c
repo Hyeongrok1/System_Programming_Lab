@@ -17,6 +17,11 @@
 // MAX ARGUMENT NUMBER
 #define MAX_ARG_NUM 200
 
+#define RIGHT_REDIRECT 0
+#define LEFT_REDIRECT 1
+#define RIGHT_APPEND 2
+#define PIPELINE 3
+
 // CMD
 
 // head
@@ -269,6 +274,43 @@ bool command_exit(int argc, char *argv[]) {
     if (argc == 2) exit(atoi(argv[1]));
 }
 
+void execution(char *argv[MAX_ARG_NUM], int argc) {
+    int child_status = 0;
+    char path[MAX_PATH_LEN];
+    if (strcmp(argv[0], "head") == 0 ||
+        strcmp(argv[0], "tail") == 0 ||
+        strcmp(argv[0], "cat") == 0 ||
+        strcmp(argv[0], "cp") == 0 ||
+        strcmp(argv[0], "mv") == 0 ||
+        strcmp(argv[0], "rm") == 0 ||
+        strcmp(argv[0], "pwd") == 0
+    ) {
+        if (fork() == 0) {
+            execv(argv[0], argv);
+            exit(0);
+        }
+        else wait(&child_status);
+    } else if (strcmp(argv[0], "cd") == 0) command_cd(argc, argv);
+    else if (strcmp(argv[0], "exit") == 0) command_exit(argc, argv);
+    else if (strcmp(argv[0], "ls") == 0 ||
+        strcmp(argv[0], "man") == 0 ||
+        strcmp(argv[0], "grep") == 0 ||
+        strcmp(argv[0], "sort") == 0 ||
+        strcmp(argv[0], "awk") == 0 ||
+        strcmp(argv[0], "bc") == 0
+    ) {
+        sprintf(path, "/bin/%s", argv[0]);
+
+        if (fork() == 0) {       // Fork and execute the path
+            execv(path, argv);
+            exit(0);
+        }
+        else wait(&child_status); // Wait the child process     
+    } else {
+        printf("mini: comman not found\n");
+    }
+}
+
 void sig_int_handler() {
 }
 
@@ -283,10 +325,18 @@ int main(void) {
     char *command, *ptr;
     char path[MAX_PATH_LEN];
     char *argv[MAX_ARG_NUM];
+    char *tmp_argv1[MAX_ARG_NUM];
+    char *tmp_argv2[MAX_ARG_NUM];
+    char *pipe_or_red[MAX_ARG_NUM];
     pid_t pid;
     int child_status;
+    int fd[2];
+    int file_descriptor = 0;
+    int pipe_or_red_num = 0;
+
     signal(SIGINT, sig_int_handler);
     signal(SIGTSTP, sig_tstp_handler);
+
     while(1) {
         int argc = 0;
         command = NULL;
@@ -303,37 +353,39 @@ int main(void) {
             }
             argv[argc] = NULL;
 
-            if (strcmp(argv[0], "head") == 0 ||
-                strcmp(argv[0], "tail") == 0 ||
-                strcmp(argv[0], "cat") == 0 ||
-                strcmp(argv[0], "cp") == 0 ||
-                strcmp(argv[0], "mv") == 0 ||
-                strcmp(argv[0], "rm") == 0 ||
-                strcmp(argv[0], "pwd") == 0
-            ) {
-                if (fork() == 0) {
-                    execv(argv[0], argv);
-                    exit(0);
-                }
-                else wait(&child_status);
-            }
-            else if (strcmp(argv[0], "cd") == 0) command_cd(argc, argv);
-            else if (strcmp(argv[0], "exit") == 0) command_exit(argc, argv);
-            else if (strcmp(argv[0], "ls") == 0 ||
-                strcmp(argv[0], "man") == 0 ||
-                strcmp(argv[0], "grep") == 0 ||
-                strcmp(argv[0], "sort") == 0 ||
-                strcmp(argv[0], "awk") == 0 ||
-                strcmp(argv[0], "bc") == 0
-            ) {
-                sprintf(path, "/bin/%s", argv[0]);
+            // if (strcmp(argv[0], "head") == 0 ||
+            //     strcmp(argv[0], "tail") == 0 ||
+            //     strcmp(argv[0], "cat") == 0 ||
+            //     strcmp(argv[0], "cp") == 0 ||
+            //     strcmp(argv[0], "mv") == 0 ||
+            //     strcmp(argv[0], "rm") == 0 ||
+            //     strcmp(argv[0], "pwd") == 0
+            // ) {
+            //     if (fork() == 0) {
+            //         execv(argv[0], argv);
+            //         exit(0);
+            //     }
+            //     else wait(&child_status);
+            // } else if (strcmp(argv[0], "cd") == 0) command_cd(argc, argv);
+            // else if (strcmp(argv[0], "exit") == 0) command_exit(argc, argv);
+            // else if (strcmp(argv[0], "ls") == 0 ||
+            //     strcmp(argv[0], "man") == 0 ||
+            //     strcmp(argv[0], "grep") == 0 ||
+            //     strcmp(argv[0], "sort") == 0 ||
+            //     strcmp(argv[0], "awk") == 0 ||
+            //     strcmp(argv[0], "bc") == 0
+            // ) {
+            //     sprintf(path, "/bin/%s", argv[0]);
 
-                if (fork() == 0) {       // Fork and execute the path
-                    execv(path, argv);
-                    exit(0);
-                }
-                else wait(&child_status); // Wait the child process     
-            }            
+            //     if (fork() == 0) {       // Fork and execute the path
+            //         execv(path, argv);
+            //         exit(0);
+            //     }
+            //     else wait(&child_status); // Wait the child process     
+            // } else {
+            //     printf("mini: comman not found\n");
+            // }
+            execution(argv, argc);
         } else {
             ptr = strtok(command, " ");
             while (ptr != NULL) { 
@@ -342,12 +394,171 @@ int main(void) {
             }
             argv[argc] = NULL;
 
+            int red_or_pipe[MAX_ARG_NUM];
+            int red_or_pipe_num = 0;
             for (int i = 0; i < argc; i++) {
-
-
-
-                break;
+                if (strcmp(argv[i], ">") == 0) {
+                    red_or_pipe[red_or_pipe_num++] = RIGHT_REDIRECT;
+                } else if (strcmp(argv[i], "<") == 0) {
+                    red_or_pipe[red_or_pipe_num++] = LEFT_REDIRECT;
+                } else if (strcmp(argv[i], ">>") == 0) {
+                    red_or_pipe[red_or_pipe_num++] == RIGHT_APPEND;
+                } else if (strcmp(argv[i], "|") == 0) {
+                    red_or_pipe[red_or_pipe_num++] = PIPELINE;
+                }
             }
+            int pipe_val = 0;
+            int i = 0;
+            red_or_pipe_num = 0;
+            char *first_argv[MAX_ARG_NUM];
+            int first_argc = 0;
+            char *second_argv[MAX_ARG_NUM];
+            int second_argc = 0;
+            while (i < argc) {
+                if (strcmp(argv[i], ">") == 0) {
+                    if(fork() == 0) {
+                        if ((file_descriptor = open(argv[i+1], O_RDWR|O_CREAT, 0755)) < 0) {
+                            perror("Opening fail");
+                            exit(1);
+                        }
+                        dup2(file_descriptor, 1);
+                        first_argv[first_argc] = NULL;
+                        execution(first_argv, first_argc);
+                        exit(0);
+                    }
+                    else wait(&child_status);
+                    i += 2;
+                    red_or_pipe_num++;
+                    first_argc = 0;
+                } else if (strcmp(argv[i], "<") == 0) {
+                    if(fork() == 0) {
+                        // Place your code in this if block!
+                        if ((file_descriptor = open(argv[i+1], O_RDWR)) < 0) {
+                            perror("Opening fail");
+                            exit(1);
+                        }
+                        dup2(file_descriptor, 0);
+                        first_argv[first_argc] = NULL;
+                        execution(first_argv, first_argc);
+                        exit(0);
+                    }
+                    else wait(&child_status);
+                    i += 2;
+                    red_or_pipe_num++;
+                    first_argc = 0;
+                } else if (strcmp(argv[i], ">>") == 0) {
+                    if(fork() == 0) {
+                        if ((file_descriptor = open(argv[i+1], O_RDWR|O_CREAT|O_APPEND, 0755)) < 0) {
+                            perror("Opening fail");
+                            exit(1);
+                        }
+                        dup2(file_descriptor, 1);
+                        first_argv[first_argc] = NULL;
+                        execution(first_argv, first_argc);
+                        exit(0);
+                    }
+                    else wait(&child_status);
+                    i += 2;
+                    red_or_pipe_num++;
+                    first_argc = 0;
+                } else if (strcmp(argv[i], "|") == 0) {
+                    i++;
+                    red_or_pipe_num++;
+                } else {
+                    first_argv[first_argc++] = argv[i];
+                    i++;
+                }
+
+            }
+
+
+
+
+
+
+            // for (int i = 0; i < argc; i++) {
+            //     if (strcmp(argv[i], "|") == 0) {
+            //         char first_path[MAX_PATH_LEN];
+            //         char second_path[MAX_PATH_LEN];
+            //         if (pipe(fd) == -1) printf("mini: pipe failed\n");
+
+            //         for (; i < argc; i++) {
+            //             if (strcmp(argv[i+1], "|") != 0 
+            //                 && strcmp(argv[i+1], "<") != 0
+            //                 && strcmp(argv[i+1], ">") != 0
+            //                 && strcmp(argv[i+1], ">>") != 0
+            //             ) {
+            //                 printf("1");
+            //                 tmp_argv2[tmp_argc2++] = argv[i+1];
+            //             }
+            //             else break;
+            //         }   
+            //         for (int k = 0; k < tmp_argc1; k++) {
+            //             printf("%s ", tmp_argv1[k]);
+            //         }
+            //         for (int k = 0; k < tmp_argc2; k++) {
+            //             printf("%s ", tmp_argv2[k]);
+            //         }
+
+            //         if (strcmp(tmp_argv1[0], "ls") == 0 ||
+            //             strcmp(tmp_argv1[0], "man") == 0 ||
+            //             strcmp(tmp_argv1[0], "grep") == 0 ||
+            //             strcmp(tmp_argv1[0], "sort") == 0 ||
+            //             strcmp(tmp_argv1[0], "awk") == 0 ||
+            //             strcmp(tmp_argv1[0], "bc") == 0
+            //         ) sprintf(first_path, "/bin/%s", tmp_argv1[0]);
+            //         else if (strcmp(tmp_argv1[0], "head") == 0 ||
+            //             strcmp(tmp_argv1[0], "cat") == 0 ||
+            //             strcmp(tmp_argv1[0], "tail") == 0 ||
+            //             strcmp(tmp_argv1[0], "cp") == 0 ||
+            //             strcmp(tmp_argv1[0], "mv") == 0 ||
+            //             strcmp(tmp_argv1[0], "rm") == 0 ||
+            //             strcmp(tmp_argv1[0], "pwd") == 0
+            //         ) sprintf(first_path, "%s", tmp_argv1[0]);
+
+            //         if (strcmp(tmp_argv2[0], "ls") == 0 ||
+            //             strcmp(tmp_argv2[0], "man") == 0 ||
+            //             strcmp(tmp_argv2[0], "grep") == 0 ||
+            //             strcmp(tmp_argv2[0], "sort") == 0 ||
+            //             strcmp(tmp_argv2[0], "awk") == 0 ||
+            //             strcmp(tmp_argv2[0], "bc") == 0
+            //         ) sprintf(second_path, "/bin/%s", tmp_argv2[0]);
+            //         else if (strcmp(tmp_argv2[0], "head") == 0 ||
+            //             strcmp(tmp_argv2[0], "cat") == 0 ||
+            //             strcmp(tmp_argv2[0], "tail") == 0 ||
+            //             strcmp(tmp_argv2[0], "cp") == 0 ||
+            //             strcmp(tmp_argv2[0], "mv") == 0 ||
+            //             strcmp(tmp_argv2[0], "rm") == 0 ||
+            //             strcmp(tmp_argv2[0], "pwd") == 0
+            //         ) sprintf(second_path, "%s", tmp_argv2[0]);
+
+                    // if (fork() == 0) {
+                    //     if ((pid = fork()) < 0) printf("mini: fork failed\n");
+                    //     if (pid > 0) {
+                    //         close(fd[0]);
+                    //         dup2(fd[1], 1);
+                    //         execv(path, tmp_argv1);
+                    //         exit(0);
+                    //     } else {
+                    //         close(fd[1]);
+                    //         dup2(fd[0], 0);
+                    //         execv(second_path, tmp_argv2);
+                    //         exit(0);
+                    //     }
+                    // } else wait(&child_status);
+            //         tmp_argc1 = 0;
+            //         tmp_argc2 = 0;
+            //     } else if (strcmp(argv[i], "<") == 0) {
+
+            //     } else if (strcmp(argv[i], ">") == 0) {
+
+            //     } else if (strcmp(argv[i], ">>") == 0) {
+
+            //     } else {
+            //         tmp_argv1[tmp_argc1++] = argv[i];
+            //         printf("%s ", argv[i]);
+            //     }
+            // }
         }
     }
 
