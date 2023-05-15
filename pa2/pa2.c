@@ -326,7 +326,7 @@ void sig_int_handler() {
 void sig_tstp_handler() {
     int status;
     waitpid(-1, &status, WNOHANG | WUNTRACED);
-    if (WIFSTOPPED(status)) kill(0, SIGKILL);
+    if (WIFSTOPPED(status)) kill(-1, SIGKILL);
 }
 
 int main(void) {
@@ -371,6 +371,7 @@ int main(void) {
 
             int red_or_pipe[MAX_ARG_NUM];
             int red_or_pipe_num = 0;
+            int pipe_num = 0;
             for (int i = 0; i < argc; i++) {
                 if (strcmp(argv[i], ">") == 0) {
                     red_or_pipe[red_or_pipe_num++] = RIGHT_REDIRECT;
@@ -379,6 +380,7 @@ int main(void) {
                 } else if (strcmp(argv[i], ">>") == 0) {
                     red_or_pipe[red_or_pipe_num++] == RIGHT_APPEND;
                 } else if (strcmp(argv[i], "|") == 0) {
+                    pipe_num++;
                     red_or_pipe[red_or_pipe_num++] = PIPELINE;
                 }
             }
@@ -405,7 +407,7 @@ int main(void) {
             int first_argc = 0;
             char *second_argv[MAX_ARG_NUM];
             int second_argc = 0;
-
+            char **pipe_commands[20];
             while (i < argc) {
                 if (strcmp(argv[i], ">") == 0) {
                     if(fork() == 0) {
@@ -448,14 +450,14 @@ int main(void) {
                         first_argv[first_argc] = NULL;
 
                         execution(first_argv, first_argc);
-                        while (strcmp(red_or_pipe[red_or_pipe_num+1], "|") == 0) {
+                        while (red_or_pipe[red_or_pipe_num+1] == PIPELINE) {
                             red_or_pipe_num++;
                             if(pipe(fd) == -1) break;
 
                             if(fork() == 0) {
                                 // Place your code in this if block!
                                 if ((pid = fork()) < 0) exit(1);
-                                while (strcmp(argv[i+1], "|") != 0 && strcmp(argv[i+1], ">") != 0) {
+                                while (strcmp(argv[i+1], "|") != 0 && strcmp(argv[i+1], ">") != 0 && strcmp(argv[i+1], ">>") != 0) {
                                     second_argv[second_argc++] = argv[i];
                                     i++;
                                 }
@@ -482,8 +484,59 @@ int main(void) {
                     first_argc = 0;
                     second_argc = 0;
                 } else if (strcmp(argv[i], "|") == 0) {
+                    int first_pid = 0;
+                    int second_pid = 0;
+                    first_argv[first_argc] = NULL;
+                    pipe_commands[0] = first_argv;
+                    i++;
+
+                    for (int j = 1; j < pipe_num+1; j++) {
+                        char **tmp_argv = (char **) malloc(sizeof(char *) * MAX_ARG_NUM);
+                        while (i < argc && strcmp(argv[i], "|") != 0 && strcmp(argv[i], ">") != 0 && strcmp(argv[i], ">>") != 0) {
+                            tmp_argv[second_argc++] = argv[i++];
+                        }
+                        i++;
+                        tmp_argv[second_argc] = NULL;
+                        pipe_commands[j] = tmp_argv;
+                        second_argc = 0;
+                    }
+
+                    int j = 0;
+                    int fd_backup = 0;
+                    char ***cmd = pipe_commands;
+
+                    if (fork() == 0) {
+                        int t = 1;
+                        while (*cmd != NULL) {
+                            pipe(fd);
+                            if ((pid = fork()) == -1) {
+                                perror("fork");
+                            } else if (pid == 0) {
+                                dup2(fd_backup, 0);
+                                if (*(cmd+1) != NULL) {
+                                    dup2(fd[1], 1);
+                                } 
+                                close(fd[0]);
+                                execvp(*(cmd)[0], *cmd);
+                                exit(0);
+                            } else {
+                                wait(NULL);
+                                close(fd[1]);
+                                fd_backup = fd[0];
+                                cmd++;
+                            }
+                            t++;
+                        }
+                        exit(0);
+                    } else wait(&child_status);
+
+                    for (int j = 1; j < pipe_num+1; j++) {
+                        free(pipe_commands[j]);
+                    }
                     i++;
                     red_or_pipe_num++;
+                    first_argc = 0;
+                    second_argc = 0;
                 } else {
                     first_argv[first_argc++] = argv[i];
                     i++;
