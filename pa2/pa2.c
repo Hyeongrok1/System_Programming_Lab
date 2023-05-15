@@ -22,6 +22,7 @@
 #define RIGHT_APPEND 2
 #define PIPELINE 3
 
+char cmd_path[MAX_PATH_LEN] = {'\0',};
 // cd 
 bool command_cd(int argc, char *argv[]) {
 	if (argc == 1) {
@@ -50,7 +51,7 @@ bool command_exit(int argc, char *argv[]) {
 void execution(char *argv[MAX_ARG_NUM], int argc) {
     int child_status = 0;
     char err_msg[25];
-    char path[MAX_PATH_LEN];
+    char path[MAX_PATH_LEN*2];
     if (strcmp(argv[0], "head") == 0 ||
         strcmp(argv[0], "tail") == 0 ||
         strcmp(argv[0], "cat") == 0 ||
@@ -60,7 +61,8 @@ void execution(char *argv[MAX_ARG_NUM], int argc) {
         strcmp(argv[0], "pwd") == 0
     ) {
         if (fork() == 0) {
-            execv(argv[0], argv);
+            sprintf(path, "%s/%s", cmd_path, argv[0]);
+            execv(path, argv);
             exit(0);
         } else wait(&child_status);
     } else if (strcmp(argv[0], "cd") == 0) command_cd(argc, argv);
@@ -79,8 +81,6 @@ void execution(char *argv[MAX_ARG_NUM], int argc) {
             exit(0);
         } else wait(&child_status); // Wait the child process     
     } else if (argv[0][0] == '.' && argv[0][1] == '/') {
-        for (int i = 0; i < strlen(argv[0])-1; i++) argv[0][i] = argv[0][i+2];
-
         if (fork() == 0) {
             execv(argv[0], argv);
             exit(0);
@@ -111,8 +111,11 @@ int main(void) {
     int child_status;
     int fd[2];
     int file_descriptor = 0;
+    int file_descriptor2 = 0;
     int pipe_or_red_num = 0;
+    // char *cmd_path = (char *) malloc(sizeof(char) * MAX_PATH_LEN);
 
+    getcwd(cmd_path, 200);
     signal(SIGINT, sig_int_handler);
     signal(SIGTSTP, sig_tstp_handler);
 
@@ -207,20 +210,117 @@ int main(void) {
                     i += 2;
                     first_argc = 0;
                 } else if (strcmp(argv[i], "<") == 0) {
-                    if(fork() == 0) {
-                        // Place your code in this if block!
-                        if ((file_descriptor = open(argv[i+1], O_RDWR)) < 0) {
-                            printf("mini: No such file or directory\n");
-                            exit(1);
-                        }
-                        dup2(file_descriptor, 0);
-                        first_argv[first_argc] = NULL;
+                    int k = 0;
 
-                        execution(first_argv, first_argc);
-                    } else wait(&child_status);
-                    i += 2;
-                    first_argc = 0;
-                    second_argc = 0;
+                    if (red_or_pipe_num == 1) {
+                        if(fork() == 0) {
+                            // Place your code in this if block!
+                            if ((file_descriptor = open(argv[i+1], O_RDONLY)) < 0) {
+                                printf("mini: No such file or directory\n");
+                                exit(1);
+                            }
+                            dup2(file_descriptor, STDIN_FILENO);
+                            first_argv[first_argc] = NULL;
+                            close(file_descriptor);
+                            execution(first_argv, first_argc);
+                            exit(0);
+                        } else wait(&child_status);
+                        i += 2;
+                        first_argc = 0;
+                        second_argc = 0;
+                        continue;
+                    } else if (red_or_pipe_num == 2 && (red_or_pipe[red_or_pipe_num-1] == RIGHT_REDIRECT || red_or_pipe[red_or_pipe_num-1] == RIGHT_REDIRECT)) {
+                        if(fork() == 0) {
+                            // Place your code in this if block!
+                            if ((file_descriptor = open(argv[i+1], O_RDONLY)) < 0) {
+                                printf("mini: No such file or directory\n");
+                                exit(1);
+                            }
+                            if (red_or_pipe[red_or_pipe_num-1] == RIGHT_REDIRECT) {
+                                if ((file_descriptor2 = open(argv[i+3], O_RDWR|O_CREAT, 0755)) < 0) {
+                                    exit(1);
+                                }
+                            } else if (red_or_pipe[red_or_pipe_num-1] == RIGHT_APPEND) {
+                                if ((file_descriptor2 = open(argv[i+3], O_RDWR|O_CREAT|O_APPEND, 0755)) < 0) {
+                                    exit(1);
+                                }
+                            }
+                            dup2(file_descriptor, STDIN_FILENO);
+                            dup2(file_descriptor2, STDOUT_FILENO);
+                            first_argv[first_argc] = NULL;
+                            close(file_descriptor);
+                            execution(first_argv, first_argc);
+                            exit(0);
+                        } else wait(&child_status);
+                        i += 2;
+                        i += 2;
+                        first_argc = 0;
+                        second_argc = 0;
+                        continue;                    
+                    } else if (red_or_pipe_num > 2) {
+                        first_argv[first_argc] = NULL;
+                        pipe_commands[0] = first_argv;
+                        i++;
+
+                        for (int j = 1; j < red_or_pipe_num+1; j++) {
+                            char **tmp_argv = (char **) malloc(sizeof(char *) * MAX_ARG_NUM);
+                            while (i < argc && strcmp(argv[i], "|") != 0 && strcmp(argv[i], ">") != 0 && strcmp(argv[i], ">>") != 0) {
+                                tmp_argv[second_argc++] = argv[i++];
+                            }
+                            i++;
+                            tmp_argv[second_argc] = NULL;
+                            pipe_commands[j] = tmp_argv;
+                            second_argc = 0;
+                        }
+                        pipe_commands[red_or_pipe_num+1] = NULL;
+
+                        char ***cmd = pipe_commands;
+                        int fd_backup = -1;
+                        if (red_or_pipe[red_or_pipe_num-1] == PIPELINE) {
+                            if (fork() == 0) {
+                                int t = 1;
+                                while (*cmd != NULL) {
+                                    pipe(fd);
+                                    if ((pid = fork()) == -1) {
+                                        perror("fork");
+                                    } else if (pid == 0) {
+                                        if (fd_backup == -1) {
+                                            // Place your code in this if block!
+                                            if ((file_descriptor = open(argv[i+1], O_RDONLY)) < 0) {
+                                                printf("mini: No such file or directory\n");
+                                                exit(1);
+                                            }
+                                            dup2(file_descriptor, STDIN_FILENO);
+                                            first_argv[first_argc] = NULL;
+                                            close(file_descriptor);
+                                        }
+                                        else dup2(fd_backup, 0);
+
+                                        if (*(cmd+1) != NULL) {
+                                            dup2(fd[1], 1);
+                                        } 
+                                        close(fd[0]);
+                                        execution(*(cmd), 0);
+                                        exit(0);
+                                    } else {
+                                        wait(NULL);
+                                        close(fd[1]);
+                                        fd_backup = fd[0];
+                                        cmd++;
+                                    }
+                                    t++;
+                                }
+                                exit(0);
+                            } else wait(&child_status);
+                        } else if (red_or_pipe[red_or_pipe_num-1] == RIGHT_APPEND || red_or_pipe[red_or_pipe_num-1] == RIGHT_REDIRECT) {
+
+                        }
+ 
+                        for (int j = 1; j < pipe_num+1; j++) free(pipe_commands[j]);
+                        i++;
+                        first_argc = 0;
+                        second_argc = 0;
+                    }
                 } else if (strcmp(argv[i], "|") == 0) {
                     first_argv[first_argc] = NULL;
                     pipe_commands[0] = first_argv;
@@ -254,7 +354,7 @@ int main(void) {
                                         dup2(fd[1], 1);
                                     } 
                                     close(fd[0]);
-                                    execvp(*(cmd)[0], *cmd);
+                                    execution(*(cmd), 0);
                                     exit(0);
                                 } else {
                                     wait(NULL);
@@ -277,7 +377,6 @@ int main(void) {
                                     dup2(fd_backup, 0);
                                     if (*(cmd+1) != NULL) {
                                         if (*(cmd+2) == NULL) {
-                                            printf("%s", *(cmd+1)[0]);
                                             if (red_or_pipe[red_or_pipe_num-1] == RIGHT_REDIRECT) {
                                                 if ((file_descriptor = open(*(cmd+1)[0], O_RDWR|O_CREAT, 0755)) < 0) {
                                                     perror("Opening fail");
@@ -293,7 +392,7 @@ int main(void) {
                                         } else dup2(fd[1], 1);
                                     } 
                                     close(fd[0]);
-                                    execvp(*(cmd)[0], *cmd);
+                                    if (*(cmd+1) != NULL) execution(*(cmd), 0);
                                     exit(0);
                                 } else {
                                     wait(NULL);
@@ -307,10 +406,7 @@ int main(void) {
                         } else wait(&child_status); 
                     }
 
-
-                    for (int j = 1; j < pipe_num+1; j++) {
-                        free(pipe_commands[j]);
-                    }
+                    for (int j = 1; j < pipe_num+1; j++) free(pipe_commands[j]);
                     i++;
                     first_argc = 0;
                     second_argc = 0;

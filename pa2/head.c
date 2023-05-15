@@ -55,11 +55,12 @@ int main(int argc, char *argv[]) {
         if (c == '\n') i++;
         if (i == line) break;
     }
-
+    printf("\n");
     if (close(fd) < 0) {
         sprintf(err_msg, "head: Error occurred: %d\n", errno);
         write(STDERR_FILENO, err_msg, strlen(err_msg));
         exit(errno);
     }
+
     return 0;
 }

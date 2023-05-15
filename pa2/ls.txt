@@ -1,0 +1,25 @@
+total 224
+drwxr-xr-x 13 jhr jhr  4096 May 13 21:11 ..
+drwxr-xr-x  3 jhr jhr  4096 May 15 21:03 .
+drwxr-xr-x  2 jhr jhr  4096 May 13 22:04 .vscode
+-rwxr-xr-x  1 jhr jhr 21368 May 15 21:03 pa2
+-rwxr-xr-x  1 jhr jhr 16448 May 15 20:15 head
+-rwxr-xr-x  1 jhr jhr 16432 May 15 20:15 tail
+-rwxr-xr-x  1 jhr jhr 16344 May 15 20:15 mv
+-rwxr-xr-x  1 jhr jhr 16328 May 15 20:15 cat
+-rwxr-xr-x  1 jhr jhr 16184 May 15 20:15 rm
+-rwxr-xr-x  1 jhr jhr 16176 May 15 20:15 cp
+-rwxr-xr-x  1 jhr jhr 16136 May 15 20:15 pwd
+-rwxr-xr-x  1 jhr jhr   119 May 15 21:06 ls.txt
+-rw-r--r--  1 jhr jhr 17520 May 15 21:05 pa2.c
+-rw-r--r--  1 jhr jhr  3565 May 15 19:42 main.c
+-rw-r--r--  1 jhr jhr  1862 May 14 23:21 tail.c
+-rw-r--r--  1 jhr jhr  1689 May 14 23:33 head.c
+-rw-r--r--  1 jhr jhr  1454 May 14 23:35 mv.c
+-rw-r--r--  1 jhr jhr   869 May 15 18:26 cat.c
+-rw-r--r--  1 jhr jhr   866 May 14 23:35 cp.c
+-rw-r--r--  1 jhr jhr   634 May 14 23:36 rm.c
+-rw-r--r--  1 jhr jhr   339 May 14 23:35 pwd.c
+-rw-r--r--  1 jhr jhr   316 May 14 02:07 Makefile
+-rw-r--r--  1 jhr jhr    82 May 14 00:51 example.c
+-rw-r--r--  1 jhr jhr     2 May 15 20:47 tmp.txt

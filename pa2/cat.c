@@ -9,7 +9,7 @@ int main(int argc, char *argv[]) {
     char *err_msg = NULL;
     if (argc != 2) {
         err_msg = "cat: usage: cat [file]\n";
-        write(STDERR_FILENO, err_msg, sizeof(err_msg));
+        write(STDERR_FILENO, err_msg, 24);
         exit(1);
     }
     
@@ -32,5 +32,6 @@ int main(int argc, char *argv[]) {
         write(STDERR_FILENO, err_msg, strlen(err_msg));
         exit(errno);
     }
+    printf("\n");
     exit(0);
 }
