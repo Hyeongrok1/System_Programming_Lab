@@ -32,6 +32,5 @@ int main(int argc, char *argv[]) {
         write(STDERR_FILENO, err_msg, strlen(err_msg));
         exit(errno);
     }
-    printf("\n");
     exit(0);
 }
