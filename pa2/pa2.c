@@ -32,7 +32,7 @@ bool command_cd(int argc, char *argv[]) {
 		if (chdir(argv[1]))
 			printf("mini: No such file or directory\n");
 	} 
-    else printf("USAGE: cd [dir]\n");
+    else printf("cd: usage: cd [dir]\n");
 
 	return true;
 }
@@ -40,7 +40,7 @@ bool command_cd(int argc, char *argv[]) {
 // exit
 bool command_exit(int argc, char *argv[]) {
     if (argc != 2 && argc != 1) {
-        printf("Usage: exit [NUM]\n");
+        printf("exit: usage: exit [NUM]\n");
     }
     write(STDERR_FILENO, "exit\n", 5);
     if (argc == 1) exit(0);
@@ -51,8 +51,9 @@ bool command_exit(int argc, char *argv[]) {
 void execution(char *argv[MAX_ARG_NUM], int argc) {
     int child_status = 0;
     char err_msg[25];
-    char path[MAX_PATH_LEN*2];
-    if (strcmp(argv[0], "head") == 0 ||
+    char path[MAX_PATH_LEN*2];  // contains the execev path
+    // If the command is available executable 
+    if (strcmp(argv[0], "head") == 0 || 
         strcmp(argv[0], "tail") == 0 ||
         strcmp(argv[0], "cat") == 0 ||
         strcmp(argv[0], "cp") == 0 ||
@@ -65,8 +66,11 @@ void execution(char *argv[MAX_ARG_NUM], int argc) {
             execv(path, argv);
             exit(0);
         } else wait(&child_status);
-    } else if (strcmp(argv[0], "cd") == 0) command_cd(argc, argv);
+    } 
+    // If the command is built-in
+    else if (strcmp(argv[0], "cd") == 0) command_cd(argc, argv);
     else if (strcmp(argv[0], "exit") == 0) command_exit(argc, argv);
+    // If the command is executable, but not implemented by myself
     else if (strcmp(argv[0], "ls") == 0 ||
         strcmp(argv[0], "man") == 0 ||
         strcmp(argv[0], "grep") == 0 ||
@@ -80,7 +84,9 @@ void execution(char *argv[MAX_ARG_NUM], int argc) {
             execv(path, argv);
             exit(0);
         } else wait(&child_status); // Wait the child process     
-    } else if (argv[0][0] == '.' && argv[0][1] == '/') {
+    } 
+    // When the command is executable that starts from "./"
+    else if (argv[0][0] == '.' && argv[0][1] == '/') {
         if (fork() == 0) {
             execv(argv[0], argv);
             exit(0);
@@ -106,15 +112,13 @@ int main(void) {
     char *command, *ptr;
     char path[MAX_PATH_LEN];
     char *argv[MAX_ARG_NUM];
-    char *pipe_or_red[MAX_ARG_NUM];
     pid_t pid;
     int child_status;
     int fd[2];
     int file_descriptor = 0;
     int file_descriptor2 = 0;
-    int pipe_or_red_num = 0;
-    // char *cmd_path = (char *) malloc(sizeof(char) * MAX_PATH_LEN);
 
+    // Get the path of current directory (the path of executable command)
     getcwd(cmd_path, 200);
     signal(SIGINT, sig_int_handler);
     signal(SIGTSTP, sig_tstp_handler);
@@ -123,20 +127,25 @@ int main(void) {
         int argc = 0;
         command = NULL;
         printf("> ");
-        getline(&command, &size, stdin);
+        // Get the command
+        getline(&command, &size, stdin);    
         command[strlen(command)-1] = '\0';
 
         // no pipeline, no redirection
         if (strchr(command, '<') == NULL && strchr(command, '>') == NULL && strchr(command, '|') == NULL) {
+            // tokenize
             ptr = strtok(command, " ");
             while (ptr != NULL) { 
                 argv[argc++] = ptr;
                 ptr = strtok(NULL, " ");
             }
             argv[argc] = NULL;
-
+            // argv contains argument of command (divided by space)
+            
+            // Execute the command
             execution(argv, argc);
         } else {
+            // If there are pipelines or redirections
             ptr = strtok(command, " ");
             while (ptr != NULL) { 
                 argv[argc++] = ptr;
@@ -147,6 +156,8 @@ int main(void) {
             int red_or_pipe[MAX_ARG_NUM] = {0,};
             int red_or_pipe_num = 0;
             int pipe_num = 0;
+            // count the number of redirections and pipelines
+            // and record the location
             for (int i = 0; i < argc; i++) {
                 if (strcmp(argv[i], ">") == 0) {
                     red_or_pipe[red_or_pipe_num++] = RIGHT_REDIRECT;
@@ -160,43 +171,49 @@ int main(void) {
                 }
             }
 
-            // bool isValid = true;
-            // if (red_or_pipe_num > 2 && strcmp(argv[red_or_pipe_num - 1], ">") == 0) isValid = false;
-            // for (int i = 1; i < argc-1; i++) {
-            //     if (strcmp(argv[i], "|") != 0) {
-            //         isValid = false;
-            //         break;
-            //     }
-            // }
-            // if (red_or_pipe_num > 2 && strcmp(argv[red_or_pipe_num-1], "<") == 0) isValid = false;
-            // if (!isValid) {
-            //     printf("mini: invalid pipe or redirection\n");
-            //     continue;
-            // }
+            // Check if the pipeline and redirection is valid
+            bool isValid = true;
+            if (red_or_pipe_num > 2 && (red_or_pipe[0] == RIGHT_APPEND || red_or_pipe[0] == RIGHT_REDIRECT)) isValid = false;
+            for (int i = 1; i < red_or_pipe_num-1; i++) {
+                if (red_or_pipe[i] != PIPELINE) isValid = false;
+            }
+            if (red_or_pipe_num > 2 && red_or_pipe[red_or_pipe_num-1] == LEFT_REDIRECT) isValid = false;
+
+            if (!isValid) {
+                printf("mini: invalid pipelins or redirections\n");
+                continue;
+            }
 
             int i = 0;
             char *first_argv[MAX_ARG_NUM];
             int first_argc = 0;
             char *second_argv[MAX_ARG_NUM];
-            int second_argc = 0;
+            int tmp_argc = 0;
             char **pipe_commands[20];
             while (i < argc) {
+                // If it encounters ">",
                 if (strcmp(argv[i], ">") == 0) {
+                    // open the file
                     if(fork() == 0) {
                         if ((file_descriptor = open(argv[i+1], O_RDWR|O_CREAT, 0755)) < 0) {
                             perror("mini:");
                             exit(1);
                         }
+                        // stdin is replaced with file_descriptor
                         dup2(file_descriptor, 1);
                         first_argv[first_argc] = NULL;
+                        // execute
                         execution(first_argv, first_argc);
                         exit(0);
                     }
                     else wait(&child_status);
-                    i += 2;
+                    i += 2; 
                     first_argc = 0;
-                } else if (strcmp(argv[i], ">>") == 0) {
+                } 
+                // If it encounters ">>"
+                else if (strcmp(argv[i], ">>") == 0) {
                     if(fork() == 0) {
+                        // similar way, but it opens the file with O_APPEND
                         if ((file_descriptor = open(argv[i+1], O_RDWR|O_CREAT|O_APPEND, 0755)) < 0) {
                             perror("Opening fail");
                             exit(1);
@@ -227,7 +244,7 @@ int main(void) {
                         } else wait(&child_status);
                         i += 2;
                         first_argc = 0;
-                        second_argc = 0;
+                        tmp_argc = 0;
                         continue;
                     } else if (red_or_pipe_num == 2 && (red_or_pipe[red_or_pipe_num-1] == RIGHT_REDIRECT || red_or_pipe[red_or_pipe_num-1] == RIGHT_REDIRECT)) {
                         if(fork() == 0) {
@@ -255,7 +272,7 @@ int main(void) {
                         i += 2;
                         i += 2;
                         first_argc = 0;
-                        second_argc = 0;
+                        tmp_argc = 0;
                         continue;                    
                     } else if (red_or_pipe_num > 2) {
                         first_argv[first_argc] = NULL;
@@ -265,12 +282,12 @@ int main(void) {
                         for (int j = 1; j < red_or_pipe_num+1; j++) {
                             char **tmp_argv = (char **) malloc(sizeof(char *) * MAX_ARG_NUM);
                             while (i < argc && strcmp(argv[i], "|") != 0 && strcmp(argv[i], ">") != 0 && strcmp(argv[i], ">>") != 0) {
-                                tmp_argv[second_argc++] = argv[i++];
+                                tmp_argv[tmp_argc++] = argv[i++];
                             }
                             i++;
-                            tmp_argv[second_argc] = NULL;
+                            tmp_argv[tmp_argc] = NULL;
                             pipe_commands[j] = tmp_argv;
-                            second_argc = 0;
+                            tmp_argc = 0;
                         }
                         pipe_commands[red_or_pipe_num+1] = NULL;
 
@@ -319,56 +336,59 @@ int main(void) {
                         for (int j = 1; j < pipe_num+1; j++) free(pipe_commands[j]);
                         i++;
                         first_argc = 0;
-                        second_argc = 0;
+                        tmp_argc = 0;
                     }
-                } else if (strcmp(argv[i], "|") == 0) {
+                } 
+                // If it encounters "|" (pipeline)
+                else if (strcmp(argv[i], "|") == 0) {
                     first_argv[first_argc] = NULL;
                     pipe_commands[0] = first_argv;
                     i++;
 
+                    // get the pipe commands
                     for (int j = 1; j < red_or_pipe_num+1; j++) {
                         char **tmp_argv = (char **) malloc(sizeof(char *) * MAX_ARG_NUM);
                         while (i < argc && strcmp(argv[i], "|") != 0 && strcmp(argv[i], ">") != 0 && strcmp(argv[i], ">>") != 0) {
-                            tmp_argv[second_argc++] = argv[i++];
+                            tmp_argv[tmp_argc++] = argv[i++];
                         }
                         i++;
-                        tmp_argv[second_argc] = NULL;
+                        tmp_argv[tmp_argc] = NULL;
                         pipe_commands[j] = tmp_argv;
-                        second_argc = 0;
+                        tmp_argc = 0;
                     }
                     pipe_commands[red_or_pipe_num+1] = NULL;
 
                     int j = 0;
                     int fd_backup = 0;
                     char ***cmd = pipe_commands;
+                    // If the last pipe or redirection is pipeline
                     if (red_or_pipe[red_or_pipe_num-1] == PIPELINE) {
                         if (fork() == 0) {
-                            int t = 1;
-                            while (*cmd != NULL) {
+                            while (*cmd != NULL) {          // Using while loop, execute the pipe commands
                                 pipe(fd);
                                 if ((pid = fork()) == -1) {
                                     perror("fork");
-                                } else if (pid == 0) {
-                                    dup2(fd_backup, 0);
-                                    if (*(cmd+1) != NULL) {
+                                } else if (pid == 0) {      
+                                    dup2(fd_backup, 0);     // stdin is replaced with fd_backup
+                                    if (*(cmd+1) != NULL) { // if next pipeline command exists, replace stdout with fd[1]
                                         dup2(fd[1], 1);
                                     } 
                                     close(fd[0]);
-                                    execution(*(cmd), 0);
+                                    execution(*(cmd), 0);   
                                     exit(0);
                                 } else {
                                     wait(NULL);
-                                    close(fd[1]);
-                                    fd_backup = fd[0];
-                                    cmd++;
+                                    close(fd[1]);       
+                                    fd_backup = fd[0];      // next backup is fd[0]
+                                    cmd++;                  // execute the next command
                                 }
-                                t++;
                             }
                             exit(0);
                         } else wait(&child_status);
-                    } else if (red_or_pipe[red_or_pipe_num-1] == RIGHT_APPEND || red_or_pipe[red_or_pipe_num-1] == RIGHT_REDIRECT) {
-                        if (fork() == 0) {
-                            int t = 1;
+                    } 
+                    // If the last pipe or redirection is RIGHT_APPEND or RIGHT_REDIRECT
+                    else if (red_or_pipe[red_or_pipe_num-1] == RIGHT_APPEND || red_or_pipe[red_or_pipe_num-1] == RIGHT_REDIRECT) {
+                        if (fork() == 0) {              // basically, similar
                             while (*cmd != NULL) {
                                 pipe(fd);
                                 if ((pid = fork()) == -1) {
@@ -376,7 +396,7 @@ int main(void) {
                                 } else if (pid == 0) {
                                     dup2(fd_backup, 0);
                                     if (*(cmd+1) != NULL) {
-                                        if (*(cmd+2) == NULL) {
+                                        if (*(cmd+2) == NULL) { // If the next command is with RIGHT_APPEND or RIGHT_REDIRECT
                                             if (red_or_pipe[red_or_pipe_num-1] == RIGHT_REDIRECT) {
                                                 if ((file_descriptor = open(*(cmd+1)[0], O_RDWR|O_CREAT, 0755)) < 0) {
                                                     perror("Opening fail");
@@ -400,17 +420,20 @@ int main(void) {
                                     fd_backup = fd[0];
                                     cmd++;
                                 }
-                                t++;
                             }
                             exit(0);
                         } else wait(&child_status); 
                     }
 
+                    // free all the allocated area
                     for (int j = 1; j < pipe_num+1; j++) free(pipe_commands[j]);
+
                     i++;
                     first_argc = 0;
-                    second_argc = 0;
-                } else {
+                    tmp_argc = 0;
+                } 
+                // If it is not yet encountered with redirection or pipeline
+                else {
                     first_argv[first_argc++] = argv[i];
                     i++;
                 }
