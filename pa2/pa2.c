@@ -70,6 +70,13 @@ bool command_exit(int argc, char *argv[]) {
     if (argc == 2) exit(atoi(argv[1])); // the termination value is argv[1]
 }
 
+void sending_SIGCHLD_handler(int sig) {
+    int status;
+    waitpid(-1, &status, WNOHANG | WUNTRACED);
+    if (WIFSTOPPED(status)) kill(-1, SIGKILL);
+    printf("\n");
+}
+
 // execute the command line
 void execution(char *argv[MAX_ARG_NUM], int argc) {
     int child_status = 0;
@@ -86,7 +93,6 @@ void execution(char *argv[MAX_ARG_NUM], int argc) {
         strcmp(argv[0], "pwd") == 0
     ) {
         if ((pid = fork()) == 0) {
-            setpgid(pid, pid);
             sprintf(path, "%s/%s", cmd_path, argv[0]);
             execv(path, argv);
             exit(0);
@@ -104,9 +110,7 @@ void execution(char *argv[MAX_ARG_NUM], int argc) {
         strcmp(argv[0], "bc") == 0
     ) {
         sprintf(path, "/bin/%s", argv[0]);
-
         if ((pid = fork()) == 0) {       // Fork and execute the path
-            setpgid(pid, pid);
             execv(path, argv);
             exit(0);
         } else wait(&child_status); // Wait the child process     
@@ -114,7 +118,6 @@ void execution(char *argv[MAX_ARG_NUM], int argc) {
     // When the command is executable that starts from "./"
     else if (argv[0][0] == '.' && argv[0][1] == '/') {
         if ((pid = fork()) == 0) {
-            setpgid(pid, pid);
             execv(argv[0], argv);
             exit(0);
         } else wait(&child_status);
@@ -123,17 +126,6 @@ void execution(char *argv[MAX_ARG_NUM], int argc) {
         sprintf(err_msg, "mini: command not found\n");
         write(STDERR_FILENO, err_msg, sizeof(err_msg));
     }
-}
-
-// signal handlers
-void sig_int_handler() {
-    printf("\n");
-}
-
-void sig_tstp_handler() {
-    int status;
-    waitpid(-1, &status, WNOHANG | WUNTRACED);
-    if (WIFSTOPPED(status)) kill(-1, SIGKILL);
 }
 
 int main(void) {
@@ -149,8 +141,9 @@ int main(void) {
 
     // Get the path of current directory (the path of executable command)
     getcwd(cmd_path, 200);
-    signal(SIGINT, sig_int_handler);    // singl handling
-    signal(SIGTSTP, sig_tstp_handler);
+    signal(SIGINT, SIG_IGN);    // singl handling
+    signal(SIGTSTP, SIG_IGN);   
+    signal(SIGCHLD, sending_SIGCHLD_handler);
 
     while(1) {
         int argc = 0;
@@ -179,7 +172,16 @@ int main(void) {
             if (argc == 0) continue;
             
             // Execute the command
-            execution(argv, argc);
+            if (strcmp(argv[0], "exit") == 0) {
+                execution(argv, argc);
+            }
+
+            if ((pid = fork()) == 0) {
+                signal(SIGTSTP, SIG_DFL);
+                setpgid(0, getpid());
+                execution(argv, argc);
+                exit(0);
+            } else wait(&child_status);
         } else {
             // If there are pipelines or redirections
             ptr = strtok(command, " ");
@@ -231,7 +233,8 @@ int main(void) {
                 if (strcmp(argv[i], ">") == 0) {
                     // open the file
                     if((pid = fork())== 0) {
-                        setpgid(pid, pid);
+                        signal(SIGTSTP, SIG_DFL);
+                        setpgid(0, getpid());
                         if ((file_descriptor = open(argv[i+1], O_RDWR|O_CREAT, 0755)) < 0) {
                             perror("mini:");
                             exit(1);
@@ -250,7 +253,8 @@ int main(void) {
                 // If it encounters ">>"
                 else if (strcmp(argv[i], ">>") == 0) {
                     if((pid = fork()) == 0) {
-                        setpgid(pid, pid);
+                        signal(SIGTSTP, SIG_DFL);
+                        setpgid(0, getpid());
                         // similar way, but it opens the file with O_APPEND
                         if ((file_descriptor = open(argv[i+1], O_RDWR|O_CREAT|O_APPEND, 0755)) < 0) {
                             perror("Opening fail");
@@ -269,7 +273,8 @@ int main(void) {
 
                     if (red_or_pipe_num == 1) {
                         if((pid = fork())== 0) {
-                            setpgid(pid, pid);
+                            signal(SIGTSTP, SIG_DFL);
+                            setpgid(0, getpid());
 
                             if ((file_descriptor = open(argv[i+1], O_RDONLY)) < 0) {
                                 printf("mini: No such file or directory\n");
@@ -287,7 +292,8 @@ int main(void) {
                         continue;
                     } else if (red_or_pipe_num == 2 && (red_or_pipe[red_or_pipe_num-1] == OUTPUT_REDIRECT || red_or_pipe[red_or_pipe_num-1] == OUTPUT_REDIRECT)) {
                         if((pid = fork()) == 0) {
-                            setpgid(pid, pid);
+                            signal(SIGTSTP, SIG_DFL);
+                            setpgid(0, getpid());
 
                             if ((file_descriptor = open(argv[i+1], O_RDONLY)) < 0) {
                                 printf("mini: No such file or directory\n");
@@ -335,7 +341,8 @@ int main(void) {
                         int fd_backup = -1;
                         if (red_or_pipe[red_or_pipe_num-1] == PIPELINE) {
                             if ((pid = fork()) == 0) {
-                                setpgid(pid, pid);
+                                signal(SIGTSTP, SIG_DFL);
+                                setpgid(0, getpid());
 
                                 for (int num = 0; num < red_or_pipe_num + 1; num++) {
                                     pipe(fd);
@@ -370,7 +377,8 @@ int main(void) {
                             } else wait(&child_status);
                         } else if (red_or_pipe[red_or_pipe_num-1] == APPEND_REDIRECT || red_or_pipe[red_or_pipe_num-1] == OUTPUT_REDIRECT) {
                             if ((pid = fork()) == 0) {              // basically, similar
-                                setpgid(pid, pid);
+                                signal(SIGTSTP, SIG_DFL);
+                                setpgid(0, getpid());
                                 for (int num = 0; num < red_or_pipe_num + 1; num++) {
                                     pipe(fd);
                                     if ((pid = fork()) == -1) {
@@ -447,7 +455,8 @@ int main(void) {
                     // If the last pipe or redirection is pipeline
                     if (red_or_pipe[red_or_pipe_num-1] == PIPELINE) {
                         if ((pid = fork()) == 0) {
-                            setpgid(pid, pid);
+                            signal(SIGTSTP, SIG_DFL);
+                            setpgid(0, getpid());
 
                             for (int num = 0; num < red_or_pipe_num + 1; num++) {          // Using while loop, execute the pipe commands
                                 pipe(fd);
@@ -473,7 +482,8 @@ int main(void) {
                     // If the last pipe or redirection is APPEND_REDIRECT or OUTPUT_REDIRECT
                     else if (red_or_pipe[red_or_pipe_num-1] == APPEND_REDIRECT || red_or_pipe[red_or_pipe_num-1] == OUTPUT_REDIRECT) {
                         if ((pid = fork()) == 0) {              // basically, similar
-                            setpgid(pid, pid);
+                            signal(SIGTSTP, SIG_DFL);
+                            setpgid(0, getpid());
                             for (int num = 0; num < red_or_pipe_num + 1; num++) {
                                 pipe(fd);
                                 if ((pid = fork()) == -1) {
