@@ -74,11 +74,12 @@ void sending_SIGCHLD_handler(int sig) {
     int status;
     waitpid(-1, &status, WNOHANG | WUNTRACED);
     if (WIFSTOPPED(status)) kill(-1, SIGKILL);
-    printf("\n");
 }
 
+int mini_shell_pid = 0;
+
 // execute the command line
-void execution(char *argv[MAX_ARG_NUM], int argc) {
+void execution(char *argv[MAX_ARG_NUM], int argc, int current_pid) {
     int child_status = 0;
     char err_msg[25];
     char path[MAX_PATH_LEN*2];  // contains the execev path
@@ -93,6 +94,10 @@ void execution(char *argv[MAX_ARG_NUM], int argc) {
         strcmp(argv[0], "pwd") == 0
     ) {
         if ((pid = fork()) == 0) {
+            if (current_pid != mini_shell_pid) {
+                signal(SIGTSTP, SIG_DFL);
+                setpgid(0, getpid());
+            }
             sprintf(path, "%s/%s", cmd_path, argv[0]);
             execv(path, argv);
             exit(0);
@@ -111,6 +116,10 @@ void execution(char *argv[MAX_ARG_NUM], int argc) {
     ) {
         sprintf(path, "/bin/%s", argv[0]);
         if ((pid = fork()) == 0) {       // Fork and execute the path
+            if (current_pid != mini_shell_pid) {
+                signal(SIGTSTP, SIG_DFL);
+                setpgid(0, getpid());
+            }
             execv(path, argv);
             exit(0);
         } else wait(&child_status); // Wait the child process     
@@ -118,6 +127,10 @@ void execution(char *argv[MAX_ARG_NUM], int argc) {
     // When the command is executable that starts from "./"
     else if (argv[0][0] == '.' && argv[0][1] == '/') {
         if ((pid = fork()) == 0) {
+            if (current_pid != mini_shell_pid) {
+                signal(SIGTSTP, SIG_DFL);
+                setpgid(0, getpid());
+            }
             execv(argv[0], argv);
             exit(0);
         } else wait(&child_status);
@@ -144,6 +157,7 @@ int main(void) {
     signal(SIGINT, SIG_IGN);    // singl handling
     signal(SIGTSTP, SIG_IGN);   
     signal(SIGCHLD, sending_SIGCHLD_handler);
+    mini_shell_pid = getpid();
 
     while(1) {
         int argc = 0;
@@ -173,15 +187,10 @@ int main(void) {
             
             // Execute the command
             if (strcmp(argv[0], "exit") == 0) {
-                execution(argv, argc);
+                execution(argv, argc, getpid());
             }
 
-            if ((pid = fork()) == 0) {
-                signal(SIGTSTP, SIG_DFL);
-                setpgid(0, getpid());
-                execution(argv, argc);
-                exit(0);
-            } else wait(&child_status);
+            execution(argv, argc, getpid());
         } else {
             // If there are pipelines or redirections
             ptr = strtok(command, " ");
@@ -243,7 +252,7 @@ int main(void) {
                         dup2(file_descriptor, 1);
                         first_argv[first_argc] = NULL;
                         // execute
-                        execution(first_argv, first_argc);
+                        execution(first_argv, first_argc, getpid());
                         exit(0);
                     }
                     else wait(&child_status);
@@ -262,7 +271,7 @@ int main(void) {
                         }
                         dup2(file_descriptor, 1);
                         first_argv[first_argc] = NULL;
-                        execution(first_argv, first_argc);
+                        execution(first_argv, first_argc, getpid());
                         exit(0);
                     }
                     else wait(&child_status);
@@ -270,6 +279,10 @@ int main(void) {
                     first_argc = 0;
                 } else if (strcmp(argv[i], "<") == 0) {
                     int k = 0;
+                    
+                    if (strcmp(first_argv[0], "head") == 0) first_argv[first_argc++] = argv[i+1];
+                    else if (strcmp(first_argv[0], "tail") == 0) first_argv[first_argc++] = argv[i+1];
+                    else if (strcmp(first_argv[0], "cat") == 0) first_argv[first_argc++] = argv[i+1];
 
                     if (red_or_pipe_num == 1) {
                         if((pid = fork())== 0) {
@@ -283,7 +296,7 @@ int main(void) {
                             dup2(file_descriptor, STDIN_FILENO);
                             first_argv[first_argc] = NULL;
                             close(file_descriptor);
-                            execution(first_argv, first_argc);
+                            execution(first_argv, first_argc, getpid());
                             exit(0);
                         } else wait(&child_status);
                         i += 2;
@@ -312,7 +325,7 @@ int main(void) {
                             dup2(file_descriptor2, STDOUT_FILENO);
                             first_argv[first_argc] = NULL;
                             close(file_descriptor);
-                            execution(first_argv, first_argc);
+                            execution(first_argv, first_argc, getpid());
                             exit(0);
                         } else wait(&child_status);
                         i += 2;
@@ -364,7 +377,7 @@ int main(void) {
                                             dup2(fd[1], STDOUT_FILENO);
                                         } 
                                         close(fd[0]);
-                                        execution(pipe_commands[num], 0);
+                                        execution(pipe_commands[num], 0, getpid());
                                         exit(0);
                                     } else {
                                         wait(NULL);
@@ -412,7 +425,7 @@ int main(void) {
                                             } else dup2(fd[1], 1);
                                         } 
                                         close(fd[0]);
-                                        if (pipe_commands[num+1] != NULL) execution(pipe_commands[num], 0);
+                                        if (pipe_commands[num+1] != NULL) execution(pipe_commands[num], 0, getpid());
                                         exit(0);
                                     } else {
                                         wait(NULL);
@@ -468,7 +481,7 @@ int main(void) {
                                         dup2(fd[1], 1);
                                     } 
                                     close(fd[0]);
-                                    execution(pipe_commands[num], 0);   
+                                    execution(pipe_commands[num], 0, getpid());   
                                     exit(0);
                                 } else {
                                     wait(NULL);
@@ -507,7 +520,7 @@ int main(void) {
                                         } else dup2(fd[1], 1);
                                     } 
                                     close(fd[0]);
-                                    if (pipe_commands[num+1] != NULL) execution(pipe_commands[num], 0);
+                                    if (pipe_commands[num+1] != NULL) execution(pipe_commands[num], 0, getpid());
                                     exit(0);
                                 } else {
                                     wait(NULL);

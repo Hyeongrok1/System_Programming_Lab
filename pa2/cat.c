@@ -8,8 +8,8 @@
 int main(int argc, char *argv[]) {
     char *err_msg = NULL;
     if (argc != 2) {
-        err_msg = "cat: usage: cat [file]\n";
-        write(STDERR_FILENO, err_msg, 24);
+        errno = EINVAL;
+        perror("cat");
         exit(1);
     }
     
@@ -17,8 +17,7 @@ int main(int argc, char *argv[]) {
     char buf[1024] = {'\0',};
     int nbytes = 0;
     if ((fd = open(argv[1], O_RDONLY)) < 0) {
-        err_msg = "cat: No such file or directory\n";
-        write(STDERR_FILENO, err_msg, strlen(err_msg));
+        perror("cat");
         exit(1);
     }
 
@@ -28,8 +27,7 @@ int main(int argc, char *argv[]) {
     }
 
     if (close(fd) < 0) {
-        sprintf(err_msg, "cat: Error occurred: %d\n", errno);
-        write(STDERR_FILENO, err_msg, strlen(err_msg));
+        perror("cat");
         exit(errno);
     }
     printf("\n");

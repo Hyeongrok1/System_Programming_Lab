@@ -14,41 +14,44 @@ int main(int argc, char *argv[]) {
     char c;
     if (argc == 2) {
         if ((fd = open(argv[1], O_RDONLY)) < 0) {
-            err_msg = "tail: No such file or directory\n";
-            write(STDERR_FILENO, err_msg, strlen(err_msg));
+            perror("tail");
             exit(1);
         }
     }
     else if (argc == 4) {
         if ((fd = open(argv[3], O_RDONLY)) < 0) {
-            err_msg = "tail: No such file or directory\n";
-            write(STDERR_FILENO, err_msg, strlen(err_msg));
+            perror("tail");
             exit(1);
         }
+    } else {
+        errno = EINVAL;
+        perror("tail");
+        exit(1);
     }
 
     if (argc == 1) {
-        err_msg = "tail: usage: tail [OPTION] [file]\n";
-        write(STDERR_FILENO, err_msg, strlen(err_msg));
+        errno = EINVAL;
+        perror("tail");
         exit(1);
     }
     else if (argc == 2) line = 10;
     else if (argc == 4) {
         if (strcmp(argv[1], "-n") != 0) {
-            err_msg = "tail: Invalid option\n";
-            write(STDERR_FILENO, err_msg, strlen(err_msg));
+            errno = EINVAL;
+            perror("tail");
             exit(1);
         }
         line = atoi(argv[2]);
     }
     else {
         if (close(fd) < 0) {
-            sprintf(err_msg, "tail: Error occurred: %d\n", errno);
-            write(STDERR_FILENO, err_msg, strlen(err_msg));
+            perror("tail");
             exit(errno);
         }
         exit(0);
     }
+    
+    if (line == 0) exit(0);
 
     int i = 0;
     int len = 0;
@@ -64,8 +67,7 @@ int main(int argc, char *argv[]) {
     }
     printf("\n");
     if (close(fd) < 0) {
-        sprintf(err_msg, "tail: Error occurred: %d\n", errno);
-        write(STDERR_FILENO, err_msg, strlen(err_msg));
+        perror("tail");
         exit(errno);
     }
     exit(0);

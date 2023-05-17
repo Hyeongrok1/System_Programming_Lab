@@ -13,52 +13,54 @@ int main(int argc, char *argv[]) {
     char c;
     if (argc == 2) {
         if ((fd = open(argv[1], O_RDONLY)) < 0) {
-            err_msg = "head: No such file or directory\n";
-            write(STDERR_FILENO, err_msg, strlen(err_msg));
+            perror("head");
             exit(1);
         }
-    }
-    else if (argc == 4) {
+    } else if (argc == 4) {
         if ((fd = open(argv[3], O_RDONLY)) < 0) {
-            err_msg = "head: No such file or directory\n";
-            write(STDERR_FILENO, err_msg, strlen(err_msg));
+            perror("head");
             exit(1);
         }
+    } else {
+        errno = EINVAL;
+        perror("head");
+        exit(1);
     }
 
     if (argc == 1) {
-        err_msg = "head: usage: head [OPTION] [file]\n";
-        write(STDERR_FILENO, err_msg, strlen(err_msg));
+        errno = EINVAL;
+        perror("head");
         exit(1);
-    }
-    else if (argc == 2) line = 10;
+    } else if (argc == 2) line = 10;
     else if (argc == 4) {
         if (strcmp(argv[1], "-n") != 0) {
-            err_msg = "head: Invalid option\n";
-            write(STDERR_FILENO, err_msg, strlen(err_msg));
+            errno = EINVAL;
+            perror("head");
             exit(1);
         }
         line = atoi(argv[2]);
     }
     else {
         if (close(fd) < 0) {
-            sprintf(err_msg, "head: Error occurred: %d\n", errno);
-            write(STDERR_FILENO, err_msg, strlen(err_msg));
+            perror("head");
             exit(errno);
         }
         exit(0);
     }
 
+    if (line == 0) exit(0);
+
     int i = 0;
     while (read(fd, &c, 1) != 0) {
-        printf("%c", c);
         if (c == '\n') i++;
-        if (i == line) break;
+        if (i == line) {
+            printf("\n");
+            break;
+        }
+        printf("%c", c);
     }
-    printf("\n");
     if (close(fd) < 0) {
-        sprintf(err_msg, "head: Error occurred: %d\n", errno);
-        write(STDERR_FILENO, err_msg, strlen(err_msg));
+        perror("head");
         exit(errno);
     }
 

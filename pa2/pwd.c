@@ -2,13 +2,14 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <string.h>
+#include <errno.h>
 
 int main (int argc, char *argv[]) {
     char *err_msg = NULL;
 
     if (argc != 1) {
-        err_msg = "pwd: usage: pwd\n";
-        write(STDERR_FILENO, err_msg, strlen(err_msg));
+        errno = EINVAL;
+        perror("pwd");
         exit(1);
     }
     char buf[100] = {'\0',};

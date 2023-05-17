@@ -8,18 +8,17 @@ int main(int argc, char *argv[]) {
     char *err_msg = NULL;
 
     if (argc == 1) {
-        err_msg = "rm: missing file operand\n";
-        write(STDERR_FILENO, err_msg, strlen(err_msg));
+        errno = EINVAL;
+        perror("rm");
         exit(1);
     } else if (argc != 2) {
-        err_msg = "rm: usage: rm file\n";
-        write(STDERR_FILENO, err_msg, strlen(err_msg));
+        errno = EINVAL;
+        perror("rm");
         exit(1);
     }
 
     if (unlink(argv[1]) < 0) {
-        sprintf(err_msg, "rm: Error occurred: %d\n", errno);
-        write(STDERR_FILENO, err_msg, strlen(err_msg));
+        perror("rm");
         exit(errno);
     }
 }
