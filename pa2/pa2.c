@@ -50,8 +50,8 @@ bool command_cd(int argc, char *argv[]) {
         }
 	} 
     else {
-        err_msg = "cd: usage: cd [dir]\n";
-        write(STDERR_FILENO, err_msg, strlen(err_msg));
+        errno = ENOTDIR;
+        perror("cd");
     }
 
 	return true;
@@ -61,7 +61,8 @@ bool command_cd(int argc, char *argv[]) {
 bool command_exit(int argc, char *argv[]) {
     char *err_msg = NULL;
     if (argc != 2 && argc != 1) {
-        err_msg = "exit: usage: exit [NUM]\n";
+        errno = ENOTDIR;
+        perror("exit");
         write(STDERR_FILENO, err_msg, strlen(err_msg));
         return false;
     }
@@ -70,7 +71,7 @@ bool command_exit(int argc, char *argv[]) {
     if (argc == 2) exit(atoi(argv[1])); // the termination value is argv[1]
 }
 
-void sending_SIGCHLD_handler(int sig) {
+void sigchld_handler(int sig) {
     int status;
     waitpid(-1, &status, WNOHANG | WUNTRACED);
     if (WIFSTOPPED(status)) kill(-1, SIGKILL);
@@ -94,7 +95,7 @@ void execution(char *argv[MAX_ARG_NUM], int argc, int current_pid) {
         strcmp(argv[0], "pwd") == 0
     ) {
         if ((pid = fork()) == 0) {
-            if (current_pid != mini_shell_pid) {
+            if (current_pid == mini_shell_pid) {
                 signal(SIGTSTP, SIG_DFL);
                 setpgid(0, getpid());
             }
@@ -116,7 +117,7 @@ void execution(char *argv[MAX_ARG_NUM], int argc, int current_pid) {
     ) {
         sprintf(path, "/bin/%s", argv[0]);
         if ((pid = fork()) == 0) {       // Fork and execute the path
-            if (current_pid != mini_shell_pid) {
+            if (current_pid == mini_shell_pid) {
                 signal(SIGTSTP, SIG_DFL);
                 setpgid(0, getpid());
             }
@@ -127,7 +128,7 @@ void execution(char *argv[MAX_ARG_NUM], int argc, int current_pid) {
     // When the command is executable that starts from "./"
     else if (argv[0][0] == '.' && argv[0][1] == '/') {
         if ((pid = fork()) == 0) {
-            if (current_pid != mini_shell_pid) {
+            if (current_pid == mini_shell_pid) {
                 signal(SIGTSTP, SIG_DFL);
                 setpgid(0, getpid());
             }
@@ -154,9 +155,9 @@ int main(void) {
 
     // Get the path of current directory (the path of executable command)
     getcwd(cmd_path, 200);
-    signal(SIGINT, SIG_IGN);    // singl handling
+    signal(SIGINT, SIG_IGN);    // signal handling
     signal(SIGTSTP, SIG_IGN);   
-    signal(SIGCHLD, sending_SIGCHLD_handler);
+    signal(SIGCHLD, sigchld_handler);
     mini_shell_pid = getpid();
 
     while(1) {
@@ -184,7 +185,9 @@ int main(void) {
 
             // If there is no argument, continue
             if (argc == 0) continue;
-            
+            for (int i = 0; i < argc; i++) {
+                printf("%s\n", argv[i]);
+            }
             // Execute the command
             if (strcmp(argv[0], "exit") == 0) {
                 execution(argv, argc, getpid());
@@ -245,7 +248,7 @@ int main(void) {
                         signal(SIGTSTP, SIG_DFL);
                         setpgid(0, getpid());
                         if ((file_descriptor = open(argv[i+1], O_RDWR|O_CREAT, 0755)) < 0) {
-                            perror("mini:");
+                            perror("mini");
                             exit(1);
                         }
                         // stdin is replaced with file_descriptor
@@ -266,7 +269,7 @@ int main(void) {
                         setpgid(0, getpid());
                         // similar way, but it opens the file with O_APPEND
                         if ((file_descriptor = open(argv[i+1], O_RDWR|O_CREAT|O_APPEND, 0755)) < 0) {
-                            perror("Opening fail");
+                            perror("mini");
                             exit(1);
                         }
                         dup2(file_descriptor, 1);
@@ -290,7 +293,7 @@ int main(void) {
                             setpgid(0, getpid());
 
                             if ((file_descriptor = open(argv[i+1], O_RDONLY)) < 0) {
-                                printf("mini: No such file or directory\n");
+                                perror("mini");
                                 exit(1);
                             }
                             dup2(file_descriptor, STDIN_FILENO);
@@ -309,15 +312,17 @@ int main(void) {
                             setpgid(0, getpid());
 
                             if ((file_descriptor = open(argv[i+1], O_RDONLY)) < 0) {
-                                printf("mini: No such file or directory\n");
+                                perror("mini");
                                 exit(1);
                             }
                             if (red_or_pipe[red_or_pipe_num-1] == OUTPUT_REDIRECT) {
                                 if ((file_descriptor2 = open(argv[i+3], O_RDWR|O_CREAT, 0755)) < 0) {
+                                    perror("mini");
                                     exit(1);
                                 }
                             } else if (red_or_pipe[red_or_pipe_num-1] == APPEND_REDIRECT) {
                                 if ((file_descriptor2 = open(argv[i+3], O_RDWR|O_CREAT|O_APPEND, 0755)) < 0) {
+                                    perror("mini");
                                     exit(1);
                                 }
                             }
@@ -365,7 +370,7 @@ int main(void) {
                                         if (fd_backup == -1) {
 
                                             if ((file_descriptor = open(argv[i_dup+1], O_RDONLY)) < 0) {
-                                                printf("mini: No such file or directory\n");
+                                                perror("mini");
                                                 exit(1);
                                             }
                                             dup2(file_descriptor, STDIN_FILENO);
@@ -400,7 +405,7 @@ int main(void) {
                                         if (fd_backup == -1) {
                                             
                                             if ((file_descriptor = open(argv[i_dup+1], O_RDONLY)) < 0) {
-                                                printf("mini: No such file or directory\n");
+                                                perror("mini");
                                                 exit(1);
                                             }
                                             dup2(file_descriptor, STDIN_FILENO);
@@ -412,12 +417,12 @@ int main(void) {
                                             if (pipe_commands[num+2] == NULL) { // If the next command is with APPEND_REDIRECT or OUTPUT_REDIRECT
                                                 if (red_or_pipe[red_or_pipe_num-1] == OUTPUT_REDIRECT) {
                                                     if ((file_descriptor = open(pipe_commands[num+1][0], O_RDWR|O_CREAT, 0755)) < 0) {
-                                                        perror("Opening fail");
+                                                        perror("mini");
                                                         exit(1);
                                                     }
                                                 } else if (red_or_pipe[red_or_pipe_num-1] == APPEND_REDIRECT) {
                                                     if ((file_descriptor = open(pipe_commands[num+1][0], O_RDWR|O_CREAT|O_APPEND, 0755)) < 0) {
-                                                        perror("Opening fail");
+                                                        perror("mini");
                                                         exit(1);
                                                     }
                                                 }
@@ -507,12 +512,12 @@ int main(void) {
                                         if (pipe_commands[num+2] == NULL) { // If the next command is with APPEND_REDIRECT or OUTPUT_REDIRECT
                                             if (red_or_pipe[red_or_pipe_num-1] == OUTPUT_REDIRECT) {
                                                 if ((file_descriptor = open(pipe_commands[num+1][0], O_RDWR|O_CREAT, 0755)) < 0) {
-                                                    perror("Opening fail");
+                                                    perror("mini");
                                                     exit(1);
                                                 }
                                             } else if (red_or_pipe[red_or_pipe_num-1] == APPEND_REDIRECT) {
                                                 if ((file_descriptor = open(pipe_commands[num+1][0], O_RDWR|O_CREAT|O_APPEND, 0755)) < 0) {
-                                                    perror("Opening fail");
+                                                    perror("mini");
                                                     exit(1);
                                                 }
                                             }

@@ -5,15 +5,19 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <sys/wait.h>
+#include <errno.h>
 
 // mv
 void main(int argc, char *argv[]) {
     if (argc == 1) {
-        printf("mv: missing file operand\n");
+        errno = EINVAL;
+        perror("mv");
     } else if (argc == 2) {
-        printf("mv: missing destination file operand after 'SOURCE'\n");
+        errno = EINVAL;
+        perror("mv");
     } else if (argc != 3) {
-        printf("mv: usage: mv source destination\n");
+        errno = EINVAL;
+        perror("mv");
     }
 
     struct stat buf;
@@ -25,7 +29,7 @@ void main(int argc, char *argv[]) {
 
     for (int i = 1; i < 3; i++) {
         if (stat(argv[i], &buf) < 0) {
-            printf("mv: \n");
+            perror("mv");
         } 
         types[i-1] = buf.st_mode;
     }
