@@ -17,20 +17,29 @@
 // MAX ARGUMENT NUMBER
 #define MAX_ARG_NUM 200
 
-#define RIGHT_REDIRECT 0
-#define LEFT_REDIRECT 1
-#define RIGHT_APPEND 2
+#define OUTPUT_REDIRECT 0
+#define INPUT_REDIRECT 1
+#define APPEND_REDIRECT 2
 #define PIPELINE 3
 
 char cmd_path[MAX_PATH_LEN] = {'\0',};
 // cd 
 bool command_cd(int argc, char *argv[]) {
-	if (argc == 1) {
+	if (argc == 1) {        // If the command is "cd", go to the home directory
 		chdir(getenv("HOME"));
 	} 
-    else if (argc == 2) {
-		if (chdir(argv[1]))
-			printf("mini: No such file or directory\n");
+    else if (argc == 2) {   // If the command is "cd [directory]", go to that directory
+        struct stat buf;
+        mode_t type;
+
+        if (stat(argv[1], &buf) < 0) {  // check the argv[1] type
+            printf("mini: No such file or directory\n");
+            return false;
+        } 
+        type = buf.st_mode;
+
+        if (!S_ISDIR(type)) printf("mini: Not a directory\n");  // If it is not a directory,
+		else if (chdir(argv[1])) printf("mini: No such file or directory\n");   // when it is a valid directory
 	} 
     else printf("cd: usage: cd [dir]\n");
 
@@ -43,8 +52,8 @@ bool command_exit(int argc, char *argv[]) {
         printf("exit: usage: exit [NUM]\n");
     }
     write(STDERR_FILENO, "exit\n", 5);
-    if (argc == 1) exit(0);
-    if (argc == 2) exit(atoi(argv[1]));
+    if (argc == 1) exit(0); // normal mini shell termination
+    if (argc == 2) exit(atoi(argv[1])); // the termination value is argv[1]
 }
 
 // execute the command line
@@ -98,7 +107,9 @@ void execution(char *argv[MAX_ARG_NUM], int argc) {
     }
 }
 
+// signal handlers
 void sig_int_handler() {
+    printf("\n");
 }
 
 void sig_tstp_handler() {
@@ -108,7 +119,7 @@ void sig_tstp_handler() {
 }
 
 int main(void) {
-    size_t size;    
+    size_t size;
     char *command, *ptr;
     char path[MAX_PATH_LEN];
     char *argv[MAX_ARG_NUM];
@@ -120,7 +131,7 @@ int main(void) {
 
     // Get the path of current directory (the path of executable command)
     getcwd(cmd_path, 200);
-    signal(SIGINT, sig_int_handler);
+    signal(SIGINT, sig_int_handler);    // singl handling
     signal(SIGTSTP, sig_tstp_handler);
 
     while(1) {
@@ -129,8 +140,12 @@ int main(void) {
         printf("> ");
         // Get the command
         getline(&command, &size, stdin);    
-        command[strlen(command)-1] = '\0';
 
+        if (strlen(command) == 1) command[strlen(command)] = '\0';
+        else command[strlen(command)-1] = '\0';
+
+        if (strcmp(command, "\n") == 0) continue;
+        
         // no pipeline, no redirection
         if (strchr(command, '<') == NULL && strchr(command, '>') == NULL && strchr(command, '|') == NULL) {
             // tokenize
@@ -141,6 +156,9 @@ int main(void) {
             }
             argv[argc] = NULL;
             // argv contains argument of command (divided by space)
+
+            // If there is no argument, continue
+            if (argc == 0) continue;
             
             // Execute the command
             execution(argv, argc);
@@ -160,11 +178,11 @@ int main(void) {
             // and record the location
             for (int i = 0; i < argc; i++) {
                 if (strcmp(argv[i], ">") == 0) {
-                    red_or_pipe[red_or_pipe_num++] = RIGHT_REDIRECT;
+                    red_or_pipe[red_or_pipe_num++] = OUTPUT_REDIRECT;
                 } else if (strcmp(argv[i], "<") == 0) {
-                    red_or_pipe[red_or_pipe_num++] = LEFT_REDIRECT;
+                    red_or_pipe[red_or_pipe_num++] = INPUT_REDIRECT;
                 } else if (strcmp(argv[i], ">>") == 0) {
-                    red_or_pipe[red_or_pipe_num++] == RIGHT_APPEND;
+                    red_or_pipe[red_or_pipe_num++] == APPEND_REDIRECT;
                 } else if (strcmp(argv[i], "|") == 0) {
                     pipe_num++;
                     red_or_pipe[red_or_pipe_num++] = PIPELINE;
@@ -173,11 +191,11 @@ int main(void) {
 
             // Check if the pipeline and redirection is valid
             bool isValid = true;
-            if (red_or_pipe_num > 2 && (red_or_pipe[0] == RIGHT_APPEND || red_or_pipe[0] == RIGHT_REDIRECT)) isValid = false;
+            if (red_or_pipe_num > 2 && (red_or_pipe[0] == APPEND_REDIRECT || red_or_pipe[0] == OUTPUT_REDIRECT)) isValid = false;
             for (int i = 1; i < red_or_pipe_num-1; i++) {
                 if (red_or_pipe[i] != PIPELINE) isValid = false;
             }
-            if (red_or_pipe_num > 2 && red_or_pipe[red_or_pipe_num-1] == LEFT_REDIRECT) isValid = false;
+            if (red_or_pipe_num > 2 && red_or_pipe[red_or_pipe_num-1] == INPUT_REDIRECT) isValid = false;
 
             if (!isValid) {
                 printf("mini: invalid pipelins or redirections\n");
@@ -246,18 +264,18 @@ int main(void) {
                         first_argc = 0;
                         tmp_argc = 0;
                         continue;
-                    } else if (red_or_pipe_num == 2 && (red_or_pipe[red_or_pipe_num-1] == RIGHT_REDIRECT || red_or_pipe[red_or_pipe_num-1] == RIGHT_REDIRECT)) {
+                    } else if (red_or_pipe_num == 2 && (red_or_pipe[red_or_pipe_num-1] == OUTPUT_REDIRECT || red_or_pipe[red_or_pipe_num-1] == OUTPUT_REDIRECT)) {
                         if(fork() == 0) {
                             // Place your code in this if block!
                             if ((file_descriptor = open(argv[i+1], O_RDONLY)) < 0) {
                                 printf("mini: No such file or directory\n");
                                 exit(1);
                             }
-                            if (red_or_pipe[red_or_pipe_num-1] == RIGHT_REDIRECT) {
+                            if (red_or_pipe[red_or_pipe_num-1] == OUTPUT_REDIRECT) {
                                 if ((file_descriptor2 = open(argv[i+3], O_RDWR|O_CREAT, 0755)) < 0) {
                                     exit(1);
                                 }
-                            } else if (red_or_pipe[red_or_pipe_num-1] == RIGHT_APPEND) {
+                            } else if (red_or_pipe[red_or_pipe_num-1] == APPEND_REDIRECT) {
                                 if ((file_descriptor2 = open(argv[i+3], O_RDWR|O_CREAT|O_APPEND, 0755)) < 0) {
                                     exit(1);
                                 }
@@ -270,13 +288,13 @@ int main(void) {
                             exit(0);
                         } else wait(&child_status);
                         i += 2;
-                        i += 2;
                         first_argc = 0;
                         tmp_argc = 0;
                         continue;                    
-                    } else if (red_or_pipe_num > 2) {
+                    } else if (red_or_pipe_num >= 2) {
                         first_argv[first_argc] = NULL;
                         pipe_commands[0] = first_argv;
+                        int i_dup = i;
                         i++;
 
                         for (int j = 1; j < red_or_pipe_num+1; j++) {
@@ -291,46 +309,87 @@ int main(void) {
                         }
                         pipe_commands[red_or_pipe_num+1] = NULL;
 
-                        char ***cmd = pipe_commands;
+                        int num = 0;
                         int fd_backup = -1;
                         if (red_or_pipe[red_or_pipe_num-1] == PIPELINE) {
                             if (fork() == 0) {
-                                int t = 1;
-                                while (*cmd != NULL) {
+                                for (int num = 0; num < red_or_pipe_num + 1; num++) {
                                     pipe(fd);
                                     if ((pid = fork()) == -1) {
                                         perror("fork");
                                     } else if (pid == 0) {
                                         if (fd_backup == -1) {
                                             // Place your code in this if block!
-                                            if ((file_descriptor = open(argv[i+1], O_RDONLY)) < 0) {
+                                            if ((file_descriptor = open(argv[i_dup+1], O_RDONLY)) < 0) {
                                                 printf("mini: No such file or directory\n");
                                                 exit(1);
                                             }
                                             dup2(file_descriptor, STDIN_FILENO);
-                                            first_argv[first_argc] = NULL;
                                             close(file_descriptor);
                                         }
-                                        else dup2(fd_backup, 0);
-
-                                        if (*(cmd+1) != NULL) {
-                                            dup2(fd[1], 1);
+                                        else dup2(fd_backup, STDIN_FILENO);
+                                        
+                                        if (pipe_commands[num+1] != NULL) {
+                                            dup2(fd[1], STDOUT_FILENO);
                                         } 
                                         close(fd[0]);
-                                        execution(*(cmd), 0);
+                                        execution(pipe_commands[num], 0);
                                         exit(0);
                                     } else {
                                         wait(NULL);
                                         close(fd[1]);
+                                        if (fd_backup == -1) num++;
                                         fd_backup = fd[0];
-                                        cmd++;
                                     }
-                                    t++;
                                 }
                                 exit(0);
                             } else wait(&child_status);
-                        } else if (red_or_pipe[red_or_pipe_num-1] == RIGHT_APPEND || red_or_pipe[red_or_pipe_num-1] == RIGHT_REDIRECT) {
+                        } else if (red_or_pipe[red_or_pipe_num-1] == APPEND_REDIRECT || red_or_pipe[red_or_pipe_num-1] == OUTPUT_REDIRECT) {
+                            if (fork() == 0) {              // basically, similar
+                                for (int num = 0; num < red_or_pipe_num + 1; num++) {
+                                    pipe(fd);
+                                    if ((pid = fork()) == -1) {
+                                        perror("fork");
+                                    } else if (pid == 0) {
+                                        if (fd_backup == -1) {
+                                            // Place your code in this if block!
+                                            if ((file_descriptor = open(argv[i_dup+1], O_RDONLY)) < 0) {
+                                                printf("mini: No such file or directory\n");
+                                                exit(1);
+                                            }
+                                            dup2(file_descriptor, STDIN_FILENO);
+                                            close(file_descriptor);
+                                        }
+                                        else dup2(fd_backup, STDIN_FILENO);
 
+                                        if (pipe_commands[num+1] != NULL) {
+                                            if (pipe_commands[num+2] == NULL) { // If the next command is with APPEND_REDIRECT or OUTPUT_REDIRECT
+                                                if (red_or_pipe[red_or_pipe_num-1] == OUTPUT_REDIRECT) {
+                                                    if ((file_descriptor = open(pipe_commands[num+1][0], O_RDWR|O_CREAT, 0755)) < 0) {
+                                                        perror("Opening fail");
+                                                        exit(1);
+                                                    }
+                                                } else if (red_or_pipe[red_or_pipe_num-1] == APPEND_REDIRECT) {
+                                                    if ((file_descriptor = open(pipe_commands[num+1][0], O_RDWR|O_CREAT|O_APPEND, 0755)) < 0) {
+                                                        perror("Opening fail");
+                                                        exit(1);
+                                                    }
+                                                }
+                                                dup2(file_descriptor, 1);
+                                            } else dup2(fd[1], 1);
+                                        } 
+                                        close(fd[0]);
+                                        if (pipe_commands[num+1] != NULL) execution(pipe_commands[num], 0);
+                                        exit(0);
+                                    } else {
+                                        wait(NULL);
+                                        close(fd[1]);
+                                        if (fd_backup == -1) num++;
+                                        fd_backup = fd[0];
+                                    }
+                                }
+                                exit(0);
+                            } else wait(&child_status); 
                         }
  
                         for (int j = 1; j < pipe_num+1; j++) free(pipe_commands[j]);
@@ -360,50 +419,48 @@ int main(void) {
 
                     int j = 0;
                     int fd_backup = 0;
-                    char ***cmd = pipe_commands;
                     // If the last pipe or redirection is pipeline
                     if (red_or_pipe[red_or_pipe_num-1] == PIPELINE) {
                         if (fork() == 0) {
-                            while (*cmd != NULL) {          // Using while loop, execute the pipe commands
+                            for (int num = 0; num < red_or_pipe_num + 1; num++) {          // Using while loop, execute the pipe commands
                                 pipe(fd);
                                 if ((pid = fork()) == -1) {
                                     perror("fork");
                                 } else if (pid == 0) {      
                                     dup2(fd_backup, 0);     // stdin is replaced with fd_backup
-                                    if (*(cmd+1) != NULL) { // if next pipeline command exists, replace stdout with fd[1]
+                                    if (pipe_commands[num+1] != NULL) { // if next pipeline command exists, replace stdout with fd[1]
                                         dup2(fd[1], 1);
                                     } 
                                     close(fd[0]);
-                                    execution(*(cmd), 0);   
+                                    execution(pipe_commands[num], 0);   
                                     exit(0);
                                 } else {
                                     wait(NULL);
                                     close(fd[1]);       
                                     fd_backup = fd[0];      // next backup is fd[0]
-                                    cmd++;                  // execute the next command
                                 }
                             }
                             exit(0);
                         } else wait(&child_status);
                     } 
-                    // If the last pipe or redirection is RIGHT_APPEND or RIGHT_REDIRECT
-                    else if (red_or_pipe[red_or_pipe_num-1] == RIGHT_APPEND || red_or_pipe[red_or_pipe_num-1] == RIGHT_REDIRECT) {
+                    // If the last pipe or redirection is APPEND_REDIRECT or OUTPUT_REDIRECT
+                    else if (red_or_pipe[red_or_pipe_num-1] == APPEND_REDIRECT || red_or_pipe[red_or_pipe_num-1] == OUTPUT_REDIRECT) {
                         if (fork() == 0) {              // basically, similar
-                            while (*cmd != NULL) {
+                            for (int num = 0; num < red_or_pipe_num + 1; num++) {
                                 pipe(fd);
                                 if ((pid = fork()) == -1) {
                                     perror("fork");
                                 } else if (pid == 0) {
                                     dup2(fd_backup, 0);
-                                    if (*(cmd+1) != NULL) {
-                                        if (*(cmd+2) == NULL) { // If the next command is with RIGHT_APPEND or RIGHT_REDIRECT
-                                            if (red_or_pipe[red_or_pipe_num-1] == RIGHT_REDIRECT) {
-                                                if ((file_descriptor = open(*(cmd+1)[0], O_RDWR|O_CREAT, 0755)) < 0) {
+                                    if (pipe_commands[num+1] != NULL) {
+                                        if (pipe_commands[num+2] == NULL) { // If the next command is with APPEND_REDIRECT or OUTPUT_REDIRECT
+                                            if (red_or_pipe[red_or_pipe_num-1] == OUTPUT_REDIRECT) {
+                                                if ((file_descriptor = open(pipe_commands[num+1][0], O_RDWR|O_CREAT, 0755)) < 0) {
                                                     perror("Opening fail");
                                                     exit(1);
                                                 }
-                                            } else if (red_or_pipe[red_or_pipe_num-1] == RIGHT_APPEND) {
-                                                if ((file_descriptor = open(*(cmd+1)[0], O_RDWR|O_CREAT|O_APPEND, 0755)) < 0) {
+                                            } else if (red_or_pipe[red_or_pipe_num-1] == APPEND_REDIRECT) {
+                                                if ((file_descriptor = open(pipe_commands[num+1][0], O_RDWR|O_CREAT|O_APPEND, 0755)) < 0) {
                                                     perror("Opening fail");
                                                     exit(1);
                                                 }
@@ -412,13 +469,12 @@ int main(void) {
                                         } else dup2(fd[1], 1);
                                     } 
                                     close(fd[0]);
-                                    if (*(cmd+1) != NULL) execution(*(cmd), 0);
+                                    if (pipe_commands[num+1] != NULL) execution(pipe_commands[num], 0);
                                     exit(0);
                                 } else {
                                     wait(NULL);
                                     close(fd[1]);
                                     fd_backup = fd[0];
-                                    cmd++;
                                 }
                             }
                             exit(0);

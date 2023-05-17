@@ -18,7 +18,7 @@ int main(int argc, char *argv[]) {
     int nbytes = 0;
     if ((fd = open(argv[1], O_RDONLY)) < 0) {
         err_msg = "cat: No such file or directory\n";
-        write(STDERR_FILENO, err_msg, sizeof(err_msg));
+        write(STDERR_FILENO, err_msg, strlen(err_msg));
         exit(1);
     }
 
