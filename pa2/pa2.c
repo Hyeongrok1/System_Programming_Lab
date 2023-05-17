@@ -25,6 +25,7 @@
 char cmd_path[MAX_PATH_LEN] = {'\0',};
 // cd 
 bool command_cd(int argc, char *argv[]) {
+    char *err_msg = NULL;
 	if (argc == 1) {        // If the command is "cd", go to the home directory
 		chdir(getenv("HOME"));
 	} 
@@ -33,23 +34,36 @@ bool command_cd(int argc, char *argv[]) {
         mode_t type;
 
         if (stat(argv[1], &buf) < 0) {  // check the argv[1] type
-            printf("mini: No such file or directory\n");
+            errno = ENOENT;
+            perror("cd");
             return false;
         } 
         type = buf.st_mode;
 
-        if (!S_ISDIR(type)) printf("mini: Not a directory\n");  // If it is not a directory,
-		else if (chdir(argv[1])) printf("mini: No such file or directory\n");   // when it is a valid directory
+        if (!S_ISDIR(type)) {
+            errno = ENOTDIR;
+            perror("cd"); // If it is not a directory,
+        }
+		else if (chdir(argv[1])) {
+            errno = ENOENT;
+            perror("cd"); // when it is a valid directory
+        }
 	} 
-    else printf("cd: usage: cd [dir]\n");
+    else {
+        err_msg = "cd: usage: cd [dir]\n";
+        write(STDERR_FILENO, err_msg, strlen(err_msg));
+    }
 
 	return true;
 }
 
 // exit
 bool command_exit(int argc, char *argv[]) {
+    char *err_msg = NULL;
     if (argc != 2 && argc != 1) {
-        printf("exit: usage: exit [NUM]\n");
+        err_msg = "exit: usage: exit [NUM]\n";
+        write(STDERR_FILENO, err_msg, strlen(err_msg));
+        return false;
     }
     write(STDERR_FILENO, "exit\n", 5);
     if (argc == 1) exit(0); // normal mini shell termination
@@ -61,6 +75,7 @@ void execution(char *argv[MAX_ARG_NUM], int argc) {
     int child_status = 0;
     char err_msg[25];
     char path[MAX_PATH_LEN*2];  // contains the execev path
+    pid_t pid;
     // If the command is available executable 
     if (strcmp(argv[0], "head") == 0 || 
         strcmp(argv[0], "tail") == 0 ||
@@ -70,7 +85,8 @@ void execution(char *argv[MAX_ARG_NUM], int argc) {
         strcmp(argv[0], "rm") == 0 ||
         strcmp(argv[0], "pwd") == 0
     ) {
-        if (fork() == 0) {
+        if ((pid = fork()) == 0) {
+            setpgid(pid, pid);
             sprintf(path, "%s/%s", cmd_path, argv[0]);
             execv(path, argv);
             exit(0);
@@ -89,14 +105,16 @@ void execution(char *argv[MAX_ARG_NUM], int argc) {
     ) {
         sprintf(path, "/bin/%s", argv[0]);
 
-        if (fork() == 0) {       // Fork and execute the path
+        if ((pid = fork()) == 0) {       // Fork and execute the path
+            setpgid(pid, pid);
             execv(path, argv);
             exit(0);
         } else wait(&child_status); // Wait the child process     
     } 
     // When the command is executable that starts from "./"
     else if (argv[0][0] == '.' && argv[0][1] == '/') {
-        if (fork() == 0) {
+        if ((pid = fork()) == 0) {
+            setpgid(pid, pid);
             execv(argv[0], argv);
             exit(0);
         } else wait(&child_status);
@@ -212,7 +230,8 @@ int main(void) {
                 // If it encounters ">",
                 if (strcmp(argv[i], ">") == 0) {
                     // open the file
-                    if(fork() == 0) {
+                    if((pid = fork())== 0) {
+                        setpgid(pid, pid);
                         if ((file_descriptor = open(argv[i+1], O_RDWR|O_CREAT, 0755)) < 0) {
                             perror("mini:");
                             exit(1);
@@ -230,7 +249,8 @@ int main(void) {
                 } 
                 // If it encounters ">>"
                 else if (strcmp(argv[i], ">>") == 0) {
-                    if(fork() == 0) {
+                    if((pid = fork()) == 0) {
+                        setpgid(pid, pid);
                         // similar way, but it opens the file with O_APPEND
                         if ((file_descriptor = open(argv[i+1], O_RDWR|O_CREAT|O_APPEND, 0755)) < 0) {
                             perror("Opening fail");
@@ -248,8 +268,9 @@ int main(void) {
                     int k = 0;
 
                     if (red_or_pipe_num == 1) {
-                        if(fork() == 0) {
-                            // Place your code in this if block!
+                        if((pid = fork())== 0) {
+                            setpgid(pid, pid);
+
                             if ((file_descriptor = open(argv[i+1], O_RDONLY)) < 0) {
                                 printf("mini: No such file or directory\n");
                                 exit(1);
@@ -265,8 +286,9 @@ int main(void) {
                         tmp_argc = 0;
                         continue;
                     } else if (red_or_pipe_num == 2 && (red_or_pipe[red_or_pipe_num-1] == OUTPUT_REDIRECT || red_or_pipe[red_or_pipe_num-1] == OUTPUT_REDIRECT)) {
-                        if(fork() == 0) {
-                            // Place your code in this if block!
+                        if((pid = fork()) == 0) {
+                            setpgid(pid, pid);
+
                             if ((file_descriptor = open(argv[i+1], O_RDONLY)) < 0) {
                                 printf("mini: No such file or directory\n");
                                 exit(1);
@@ -312,14 +334,16 @@ int main(void) {
                         int num = 0;
                         int fd_backup = -1;
                         if (red_or_pipe[red_or_pipe_num-1] == PIPELINE) {
-                            if (fork() == 0) {
+                            if ((pid = fork()) == 0) {
+                                setpgid(pid, pid);
+
                                 for (int num = 0; num < red_or_pipe_num + 1; num++) {
                                     pipe(fd);
                                     if ((pid = fork()) == -1) {
                                         perror("fork");
                                     } else if (pid == 0) {
                                         if (fd_backup == -1) {
-                                            // Place your code in this if block!
+
                                             if ((file_descriptor = open(argv[i_dup+1], O_RDONLY)) < 0) {
                                                 printf("mini: No such file or directory\n");
                                                 exit(1);
@@ -345,14 +369,15 @@ int main(void) {
                                 exit(0);
                             } else wait(&child_status);
                         } else if (red_or_pipe[red_or_pipe_num-1] == APPEND_REDIRECT || red_or_pipe[red_or_pipe_num-1] == OUTPUT_REDIRECT) {
-                            if (fork() == 0) {              // basically, similar
+                            if ((pid = fork()) == 0) {              // basically, similar
+                                setpgid(pid, pid);
                                 for (int num = 0; num < red_or_pipe_num + 1; num++) {
                                     pipe(fd);
                                     if ((pid = fork()) == -1) {
                                         perror("fork");
                                     } else if (pid == 0) {
                                         if (fd_backup == -1) {
-                                            // Place your code in this if block!
+                                            
                                             if ((file_descriptor = open(argv[i_dup+1], O_RDONLY)) < 0) {
                                                 printf("mini: No such file or directory\n");
                                                 exit(1);
@@ -421,7 +446,9 @@ int main(void) {
                     int fd_backup = 0;
                     // If the last pipe or redirection is pipeline
                     if (red_or_pipe[red_or_pipe_num-1] == PIPELINE) {
-                        if (fork() == 0) {
+                        if ((pid = fork()) == 0) {
+                            setpgid(pid, pid);
+
                             for (int num = 0; num < red_or_pipe_num + 1; num++) {          // Using while loop, execute the pipe commands
                                 pipe(fd);
                                 if ((pid = fork()) == -1) {
@@ -445,7 +472,8 @@ int main(void) {
                     } 
                     // If the last pipe or redirection is APPEND_REDIRECT or OUTPUT_REDIRECT
                     else if (red_or_pipe[red_or_pipe_num-1] == APPEND_REDIRECT || red_or_pipe[red_or_pipe_num-1] == OUTPUT_REDIRECT) {
-                        if (fork() == 0) {              // basically, similar
+                        if ((pid = fork()) == 0) {              // basically, similar
+                            setpgid(pid, pid);
                             for (int num = 0; num < red_or_pipe_num + 1; num++) {
                                 pipe(fd);
                                 if ((pid = fork()) == -1) {
