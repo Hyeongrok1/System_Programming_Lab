@@ -12,12 +12,12 @@
 #define RESERVE 2
 #define CHECK_RSV 3
 #define CANCEL_RSV 4
-#define LOG_OUT 5
+#define LOGOUT 5
 
 typedef struct _query {
     int user;       // user ID 0~1023
     int action;     // action ID 1~5 (0 for termination)
-    int seat;       // seat
+    int data;       // data
 } query;
 
 int main(int argc, char *argv[]) {
@@ -29,6 +29,8 @@ int main(int argc, char *argv[]) {
     char buf[6*100];
     char *queries[100];
     int query_list[100][3] = {0,};
+    memset(query_list, -1, sizeof(query_list));
+
     int query_num = 0;
     if (argc == 3) {
         /* Insert your code for terminal input */
@@ -56,7 +58,6 @@ int main(int argc, char *argv[]) {
                 query_list[i][argc_tmp++] = atoi(ptr);
                 ptr = strtok(NULL, " ");
             }
-            if (argc > 4) query_list[i][0] = -1;   // Invalid query
         }
 
         // lastly, exit query
@@ -83,10 +84,10 @@ int main(int argc, char *argv[]) {
         printf("Connection failed\n");
         exit(1);
     }
-    
+
     char *small_query_list[3];
-    char *query_line;
-    size_t size;
+    char query_line[1024];
+    char buffer[2048];
     query_num = 0;
     while (1) {
     /*
@@ -96,68 +97,87 @@ int main(int argc, char *argv[]) {
      *
      * Follow the print format below
      */
-        query new_query;  
-        if (argc == 3) {
-            
-            getline(&query_line, &size, stdin);   
+        query send_query;  
 
+        if (argc == 3) {
+            memset(query_line, 0, 1024);
+            // read the query data from stdin
+            if ((nbytes = read(STDIN_FILENO, query_line, 1024)) < 0) {
+                printf("Client: read failed.\n");
+            }
+
+            // make a query
             int num = 0;
             char *ptr = strtok(query_line, " ");
             while (ptr != NULL) {
                 small_query_list[num++] = ptr;
                 ptr = strtok(NULL, " ");
             }
-            if (num > 4) {
+            if (num != 3) {
                 printf("Invalid query\n");
                 continue;
             }
-
-            new_query.user = small_query_list[0];
-            new_query.action = small_query_list[1];
-            new_query.seat = small_query_list[2];
+            
+            // server will judge if the query data is invalid
+            send_query.user = atoi(small_query_list[0]);
+            send_query.action = atoi(small_query_list[1]);
+            send_query.data = atoi(small_query_list[2]);
         } else if (argc == 4) {  
-            new_query.user = query_list[query_num][0];
-            new_query.action = query_list[query_num][1];
-            new_query.seat = query_list[query_num][2];
+            send_query.user = query_list[query_num][0];
+            send_query.action = query_list[query_num][1];
+            send_query.data = query_list[query_num][2];
             query_num++;
+            if (send_query.data == -1) {
+                printf("Invalid query\n");
+                continue;
+            }
         }
-        int fd = 0
-        int num_bytes = 0;
-        memset(buffer, 0 1024);
-        
-        sprintf(buffer, "%d:%d:%d", new_query.user, new_query.action, new_query.seat);
-        write(client_socket, buffer, 1024);
-        memset(buffer, 0, 1024);
-        if ((num_bytes = read(client_socket, buffer, 1024)) <= 0) {
-            printf("read failed\n");
-            continue;
-        }
-        if (new_query.action == LOGIN) {
+
+        memset(buffer, 0, 2048);
+        // make query
+        sprintf(buffer, "%d:%d:%d", send_query.user, send_query.action, send_query.data);
+
+        // send query
+        send(client_socket, &send_query, sizeof(query), 0);
+
+        memset(buffer, 0, 2048);
+
+        // receive response of server
+        recv(client_socket, buffer, sizeof(buffer), 0);
+        if (send_query.action == LOGIN) {
             if (atoi(buffer) == 1) 
                 printf("Login success\n");
             else if (atoi(buffer) == -1) 
                 printf("Login failed\n");        
-        } else if (new_query.action == RESERVE) {
+        } else if (send_query.action == RESERVE) {
             int seat_reserve = atoi(buffer);
             if (seat_reserve > 0) 
                 printf("Seat %d is reserved\n", seat_reserve);
             else    
                 printf("Reservation failed\n");
-        } else if (new_query.action == CHECK_RSV) {
-
-        } else if (new_query.action == CANCEL_RSV) {
+        } else if (send_query.action == CHECK_RSV) {
+            if (strcmp(buffer, "-1") == 0) {
+                printf("Reservation check failed\n");
+            } else {
+                printf("%s\n", buffer);
+            }
+        } else if (send_query.action == CANCEL_RSV) {
             int seat_cancel = atoi(buffer);
             if (seat_cancel > 0) 
                 printf("Seat %d is canceled\n", seat_cancel);
             else 
                 printf("Cancel failed\n");
-        } else if (new_query.action == LOGOUT) {
+        } else if (send_query.action == LOGOUT) {
             if (atoi(buffer) == 1) 
                 printf("Logout success\n");
             else 
                 printf("Logout failed\n");
-        } else if (new_query.action == EXIT) {
-
+        } else if (send_query.user == EXIT && send_query.action == EXIT && send_query.data == EXIT) {
+            if (atoi(buffer) == 256) break;
+        } else {
+            if (atoi(buffer) == -1) {
+                printf("Invalid query\n");
+            }
         }
         
      /*
@@ -197,12 +217,6 @@ int main(int argc, char *argv[]) {
      *   printf("Logout failed\n");
      *
      */
-
-
-
-
-
-
     }
 
     close(client_socket);
